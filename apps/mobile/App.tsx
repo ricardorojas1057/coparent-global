@@ -97,6 +97,7 @@ import {
 import { cacheData, flushQueuedMutations, getCachedData, getQueuedMutations, queueMutation } from './src/offline';
 import { SupportedLanguage, translate } from './src/i18n';
 import { getExpoPushToken } from './src/notifications';
+import { configureCrashReporting } from './src/crashReporting';
 
 type AuthForm = {
   email: string;
@@ -782,6 +783,10 @@ function ProtectedScreen({
       })
       .catch(() => undefined);
   }, [accessToken]);
+
+  useEffect(() => {
+    configureCrashReporting(privacy?.settings.allowProductAnalytics === true).catch(() => undefined);
+  }, [privacy?.settings.allowProductAnalytics]);
 
   useEffect(() => {
     const loadOperationalData = async () => {

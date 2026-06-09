@@ -3,22 +3,28 @@
 La aplicacion registra tokens Expo Push y el backend envia avisos mediante Expo Push Service.
 En Android, Expo entrega esas notificaciones usando Firebase Cloud Messaging (FCM).
 
+## Estado actual
+
+- Proyecto Firebase gratuito: `coparent-global-5b673`.
+- App Android registrada: `ar.coparent.app`.
+- Crashlytics integrado con recoleccion automatica desactivada.
+- El usuario debe activar **Diagnostico y analitica** para permitir reportes.
+- `google-services.json` se mantiene fuera de GitHub y se entrega a EAS como archivo secreto.
+
 ## Activar notificaciones Android
 
-1. Crear un proyecto en Firebase Console.
-2. Agregar una aplicacion Android con el identificador `ar.coparent.app`.
-3. En Firebase, abrir **Configuracion del proyecto > Cuentas de servicio** y generar una clave privada.
-4. Subir esa clave a EAS como credencial FCM V1. Nunca guardarla en este repositorio.
-5. Generar una nueva APK/AAB con EAS.
+1. En Firebase, abrir **Configuracion del proyecto > Cuentas de servicio** y generar una clave privada.
+2. Subir esa clave a EAS como credencial FCM V1. Nunca guardarla en este repositorio.
+3. Generar una nueva APK/AAB con EAS.
 
 ## Activar Crashlytics
 
-Crashlytics requiere agregar la configuracion nativa privada de Firebase y generar una nueva
-compilacion. Antes de activarlo:
+Crashlytics requiere una compilacion nativa nueva. Sus controles son:
 
-- Confirmar el consentimiento de analitica/errores en la politica de privacidad.
-- Mantener `google-services.json` y las claves de servicio fuera de GitHub.
-- No adjuntar mensajes familiares, nombres de hijos/as ni comprobantes a los reportes de error.
+- Recoleccion desactivada por defecto en `apps/mobile/firebase.json`.
+- Activacion vinculada al consentimiento de diagnostico de cada usuario.
+- Sin identificadores, mensajes familiares, nombres de hijos/as ni comprobantes.
+- `google-services.json` y claves de servicio excluidos de GitHub.
 
-Crashlytics queda preparado como siguiente paso operativo, pero no se activa automaticamente
-sin las credenciales privadas del propietario del proyecto Firebase.
+Firebase comienza a mostrar errores despues de instalar y ejecutar una compilacion `0.5.1` o
+superior con el consentimiento activado.

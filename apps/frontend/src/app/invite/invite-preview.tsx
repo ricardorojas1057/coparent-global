@@ -5,7 +5,7 @@ import { publicRequest } from '../public-api';
 
 const androidDownloadUrl =
   process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL ??
-  'https://expo.dev/artifacts/eas/3aw7SdkCrBenYqAsupcsy1.apk';
+  'https://expo.dev/artifacts/eas/mpKFv36Qas8z7FWp1T7okm.apk';
 
 type InvitationPreview = {
   status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';

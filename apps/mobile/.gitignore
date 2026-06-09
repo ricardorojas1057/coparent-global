@@ -1,0 +1,5 @@
+.expo/
+google-services.json
+GoogleService-Info.plist
+*.jks
+*.keystore

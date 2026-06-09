@@ -2,7 +2,7 @@
   "expo": {
     "name": "Coparent Global",
     "slug": "coparent-argentina",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "scheme": "coparentglobal",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,9 @@
     "plugins": [
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics"
     ],
     "splash": {
       "image": "./assets/splash.png",
@@ -26,7 +28,8 @@
     },
     "android": {
       "package": "ar.coparent.app",
-      "versionCode": 9,
+      "versionCode": 10,
+      "googleServicesFile": "./google-services.json",
       "permissions": [],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
