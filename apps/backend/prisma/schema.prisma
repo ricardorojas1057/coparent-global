@@ -1,0 +1,606 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PARENT
+  ADMIN
+}
+
+enum TenantType {
+  B2C_DIRECT
+  MEDIATOR
+  LAW_FIRM
+  GOVERNMENT
+}
+
+enum TenantRole {
+  OWNER
+  ADMINISTRATOR
+  PROFESSIONAL
+  MEMBER
+}
+
+enum FamilyRole {
+  PRIMARY_PARENT
+  SECONDARY_PARENT
+  GUARDIAN
+  TUTOR
+  AUTHORIZED_ADULT
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum CalendarEventStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+enum CalendarEventType {
+  CARE
+  SCHOOL
+  HEALTH
+  ACTIVITY
+  PICKUP_DROPOFF
+  OTHER
+}
+
+enum EventStatus {
+  PENDING
+  COMPLETED
+  LATE
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  SCHOOL
+  HEALTH
+  CLOTHING
+  TRANSPORT
+  FOOD
+  EXTRACURRICULAR
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  PAID
+  REJECTED
+  OBSERVED
+}
+
+enum AlimonyInstallmentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+enum AlimonyIndex {
+  FIXED
+  IPC
+  ICL
+  RIPTE
+  SMVM
+  PERCENTAGE
+  CUSTOM
+}
+
+enum ChatCategory {
+  LOGISTICS
+  HEALTH
+  SCHOOL
+  EXPENSES
+  URGENT
+}
+
+enum MessageLegalStatus {
+  NORMAL
+  FLAGGED
+  AGREEMENT
+  INCIDENT
+}
+
+enum ScheduleType {
+  ALTERNATED_WEEK
+  TWO_TWO_THREE
+  ALTERNATED_WEEKENDS
+  CUSTOM
+}
+
+enum RelationshipMode {
+  COOPERATIVE
+  STRUCTURED
+  HIGH_CONFLICT
+}
+
+enum AccountDeletionStatus {
+  PENDING
+  CANCELLED
+  COMPLETED
+}
+
+enum FamilyInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+enum WhatsAppActionType {
+  EXPENSE
+  CALENDAR_EVENT
+  NOTE
+}
+
+enum WhatsAppActionStatus {
+  PENDING
+  PROCESSING
+  CONFIRMED
+  CANCELLED
+  FAILED
+}
+
+model Tenant {
+  id          String       @id @default(uuid())
+  name        String
+  type        TenantType   @default(B2C_DIRECT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  families    Family[]
+  tenantUsers TenantUser[]
+}
+
+model TenantUser {
+  id        String     @id @default(uuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      TenantRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([tenantId, userId])
+}
+
+model User {
+  id                    String                   @id @default(uuid())
+  email                 String                   @unique
+  passwordHash          String
+  googleSubject         String?                  @unique
+  firstName             String
+  lastName              String
+  phone                 String?
+  role                  Role                     @default(PARENT)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  tenantUsers           TenantUser[]
+  memberships           FamilyMember[]
+  expensesPaid          Expense[]                @relation("Payer")
+  expenseAllocations    ExpenseAllocation[]
+  alimonyPayments       AlimonyPayment[]         @relation("AlimonyPayer")
+  chatMessages          ChatMessage[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  eventsResponsible     CalendarEvent[]          @relation("EventResponsibleParent")
+  eventsCreated         CalendarEvent[]          @relation("EventCreator")
+  deliveriesResponsible DeliveryCheck[]          @relation("DeliveryResponsible")
+  whatsappLinks         WhatsAppLink[]
+  messageReads          ChatMessageRead[]
+  privacySettings       UserPrivacySettings?
+  deletionRequests      AccountDeletionRequest[]
+  passwordResetTokens   PasswordResetToken[]
+  invitationsCreated    FamilyInvitation[]         @relation("InvitationCreator")
+  invitationsAccepted   FamilyInvitation[]         @relation("InvitationAcceptor")
+  devicePushTokens      DevicePushToken[]
+  authVersion           Int                        @default(0)
+}
+
+model DevicePushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Family {
+  id                 String              @id @default(uuid())
+  tenantId           String
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  settings           FamilySettings?
+  members            FamilyMember[]
+  children           Child[]
+  custodySchedules   CustodySchedule[]
+  expenses           Expense[]
+  sharedExpenseRules SharedExpenseRule[]
+  alimonyConfigs     AlimonyConfig[]
+  chatMessages       ChatMessage[]
+  auditLogs          AuditLog[]
+  whatsappLinks      WhatsAppLink[]
+  invitations        FamilyInvitation[]
+}
+
+model FamilySettings {
+  id                      String           @id @default(uuid())
+  familyId                String           @unique
+  family                  Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  relationshipMode        RelationshipMode @default(COOPERATIVE)
+  locale                  String           @default("es-AR")
+  currency                String           @default("ARS")
+  timezone                String           @default("America/Argentina/Buenos_Aires")
+  countryCode             String           @default("AR")
+  jurisdictionNotice      String?
+  alimonyReminderDays     Int              @default(3)
+  enableAiModeration      Boolean          @default(false)
+  enablePushNotifications Boolean          @default(true)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+}
+
+model FamilyMember {
+  id              String                        @id @default(uuid())
+  familyId        String
+  family          Family                        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            FamilyRole                    @default(PRIMARY_PARENT)
+  createdAt       DateTime                      @default(now())
+  ruleAllocations SharedExpenseRuleAllocation[]
+
+  @@unique([familyId, userId])
+}
+
+model FamilyInvitation {
+  id           String                 @id @default(uuid())
+  familyId     String
+  family       Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  invitedById  String
+  invitedBy    User                   @relation("InvitationCreator", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedById String?
+  acceptedBy   User?                  @relation("InvitationAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  email        String?
+  role         FamilyRole             @default(SECONDARY_PARENT)
+  tokenHash    String                 @unique
+  status       FamilyInvitationStatus @default(PENDING)
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime               @default(now())
+
+  @@index([familyId, status])
+  @@index([email, status])
+}
+
+model Child {
+  id             String          @id @default(uuid())
+  familyId       String
+  family         Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  birthDate      DateTime
+  observations   String?
+  createdAt      DateTime        @default(now())
+  calendarEvents CalendarEvent[]
+}
+
+model CustodySchedule {
+  id              String          @id @default(uuid())
+  familyId        String
+  family          Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  type            ScheduleType    @default(ALTERNATED_WEEK)
+  startDate       DateTime
+  endDate         DateTime?
+  recurrenceRules Json?
+  createdAt       DateTime        @default(now())
+  events          CalendarEvent[]
+}
+
+model CalendarEvent {
+  id              String                 @id @default(uuid())
+  scheduleId      String?
+  custodySchedule CustodySchedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  childId         String
+  child           Child                  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  currentParentId String
+  currentParent   User                   @relation("EventResponsibleParent", fields: [currentParentId], references: [id])
+  createdById     String?
+  createdBy       User?                  @relation("EventCreator", fields: [createdById], references: [id])
+  title           String                 @default("Evento familiar")
+  type            CalendarEventType      @default(CARE)
+  location        String?
+  notes           String?
+  startDate       DateTime
+  endDate         DateTime
+  isOverride      Boolean                @default(false)
+  status          CalendarEventStatus    @default(SCHEDULED)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  deliveryCheck   DeliveryCheck?
+  changeRequests  CustodyChangeRequest[]
+
+  @@index([childId, startDate])
+}
+
+model CustodyChangeRequest {
+  id              String        @id @default(uuid())
+  calendarEventId String
+  calendarEvent   CalendarEvent @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  requestedById   String
+  newStartDate    DateTime
+  newEndDate      DateTime
+  status          RequestStatus @default(PENDING)
+  reason          String?
+  createdAt       DateTime      @default(now())
+}
+
+model DeliveryCheck {
+  id              String        @id @default(uuid())
+  calendarEventId String        @unique
+  calendarEvent   CalendarEvent @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  location        String
+  scheduledTime   DateTime
+  actualTime      DateTime?
+  responsibleId   String
+  responsible     User          @relation("DeliveryResponsible", fields: [responsibleId], references: [id])
+  status          EventStatus   @default(PENDING)
+  notes           String?
+}
+
+model SharedExpenseRule {
+  id                String                        @id @default(uuid())
+  familyId          String
+  family            Family                        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  category          ExpenseCategory
+  effectiveFrom     DateTime                      @default(now())
+  effectiveTo       DateTime?
+  allocations       SharedExpenseRuleAllocation[]
+  drivenAllocations ExpenseAllocation[]
+}
+
+model SharedExpenseRuleAllocation {
+  id             String            @id @default(uuid())
+  ruleId         String
+  sharedRule     SharedExpenseRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  familyMember   FamilyMember      @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  percentage     Decimal           @db.Decimal(5, 2)
+}
+
+model Expense {
+  id              String              @id @default(uuid())
+  familyId        String
+  family          Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  paidById        String
+  payer           User                @relation("Payer", fields: [paidById], references: [id])
+  description     String
+  category        ExpenseCategory
+  amount          Decimal             @db.Decimal(12, 2)
+  createdAt       DateTime            @default(now())
+  storageProvider String              @default("LOCAL")
+  storageKey      String?
+  mimeType        String?
+  fileSize        Int?
+  ocrMetadata     Json?
+  allocations     ExpenseAllocation[]
+
+  @@index([familyId, createdAt])
+}
+
+model ExpenseAllocation {
+  id           String             @id @default(uuid())
+  expenseId    String
+  expense      Expense            @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  percentage   Decimal            @db.Decimal(5, 2)
+  amountDue    Decimal            @db.Decimal(12, 2)
+  status       ExpenseStatus      @default(PENDING)
+  updatedAt    DateTime           @updatedAt
+  sourceRuleId String?
+  sourceRule   SharedExpenseRule? @relation(fields: [sourceRuleId], references: [id], onDelete: SetNull)
+
+  @@unique([expenseId, userId])
+}
+
+model AlimonyConfig {
+  id           String               @id @default(uuid())
+  familyId     String
+  family       Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  baseAmount   Decimal              @db.Decimal(12, 2)
+  dueDay       Int
+  indexType    AlimonyIndex         @default(FIXED)
+  customNotes  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  installments AlimonyInstallment[]
+}
+
+model AlimonyInstallment {
+  id              String                   @id @default(uuid())
+  alimonyConfigId String
+  alimonyConfig   AlimonyConfig            @relation(fields: [alimonyConfigId], references: [id], onDelete: Cascade)
+  dueDate         DateTime
+  baseAmount      Decimal                  @db.Decimal(12, 2)
+  adjustedAmount  Decimal                  @db.Decimal(12, 2)
+  interestAmount  Decimal                  @default(0) @db.Decimal(12, 2)
+  paidAmount      Decimal                  @default(0) @db.Decimal(12, 2)
+  status          AlimonyInstallmentStatus @default(PENDING)
+  createdAt       DateTime                 @default(now())
+  payments        AlimonyPayment[]
+}
+
+model AlimonyPayment {
+  id                   String             @id @default(uuid())
+  alimonyInstallmentId String
+  alimonyInstallment   AlimonyInstallment @relation(fields: [alimonyInstallmentId], references: [id], onDelete: Cascade)
+  paidById             String
+  payer                User               @relation("AlimonyPayer", fields: [paidById], references: [id])
+  amountPaid           Decimal            @db.Decimal(12, 2)
+  paymentDate          DateTime           @default(now())
+  storageProvider      String             @default("LOCAL")
+  storageKey           String?
+  mimeType             String?
+  fileSize             Int?
+}
+
+model EconomicIndex {
+  id            String       @id @default(uuid())
+  type          AlimonyIndex
+  referenceDate DateTime
+  value         Decimal      @db.Decimal(12, 4)
+  createdAt     DateTime     @default(now())
+  source        String       @default("MANUAL")
+  publishedAt   DateTime?
+
+  @@unique([type, referenceDate])
+}
+
+model ChatMessage {
+  id              String             @id @default(uuid())
+  familyId        String
+  family          Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User               @relation(fields: [senderId], references: [id])
+  content         String
+  originalContent String?
+  aiSuggestion    String?
+  aiIntervened    Boolean            @default(false)
+  category        ChatCategory       @default(LOGISTICS)
+  legalStatus     MessageLegalStatus @default(NORMAL)
+  createdAt       DateTime           @default(now())
+  editedAt        DateTime?
+  isDeleted       Boolean            @default(false)
+  reads           ChatMessageRead[]
+
+  @@index([familyId, createdAt])
+}
+
+model ChatMessageRead {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime    @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId, viewedAt])
+}
+
+model UserPrivacySettings {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredLocale       String   @default("es-AR")
+  allowProductAnalytics Boolean  @default(false)
+  allowAiProcessing     Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model AccountDeletionRequest {
+  id          String                @id @default(uuid())
+  userId      String
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      AccountDeletionStatus @default(PENDING)
+  requestedAt DateTime              @default(now())
+  cancelledAt DateTime?
+  completedAt DateTime?
+
+  @@index([userId, status])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model AuditLog {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  familyId         String?
+  family           Family?  @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  action           String
+  entity           String
+  entityId         String
+  timestamp        DateTime @default(now())
+  previousHash     String
+  recordHash       String
+  signatureVersion Int      @default(1)
+  metadata         Json?
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([familyId])
+}
+
+model WhatsAppLink {
+  id            String                  @id @default(uuid())
+  userId        String
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId      String
+  family        Family                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  waId          String?                 @unique
+  linkCodeHash  String?
+  codeExpiresAt DateTime?
+  linkedAt      DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  actions       WhatsAppPendingAction[]
+
+  @@unique([userId, familyId])
+}
+
+model WhatsAppPendingAction {
+  id                String               @id @default(uuid())
+  linkId            String
+  link              WhatsAppLink         @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  externalMessageId String?              @unique
+  type              WhatsAppActionType
+  status            WhatsAppActionStatus @default(PENDING)
+  originalText      String?
+  mediaId           String?
+  payload           Json
+  resultEntityId    String?
+  createdAt         DateTime             @default(now())
+  expiresAt         DateTime
+  confirmedAt       DateTime?
+
+  @@index([linkId, status, createdAt])
+}

@@ -1,0 +1,43 @@
+{
+  "name": "coparent-argentina",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend",
+    "apps/mobile",
+    "packages/shared"
+  ],
+  "scripts": {
+    "postinstall": "npm run prisma:generate",
+    "backend:dev": "npm --workspace apps/backend run start:dev",
+    "backend:build": "npm --workspace apps/backend run build",
+    "backend:test": "npm --workspace apps/backend run test",
+    "frontend:dev": "npm --workspace apps/frontend run dev",
+    "frontend:build": "npm --workspace apps/frontend run build",
+    "mobile:dev": "npm --workspace apps/mobile run start",
+    "mobile:android": "npm --workspace apps/mobile run android",
+    "mobile:build:android": "npm --workspace apps/mobile run build:android",
+    "mobile:submit:android": "npm --workspace apps/mobile run submit:android",
+    "mobile:typecheck": "npm --workspace apps/mobile run typecheck",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "prisma:generate": "npm --workspace apps/backend run prisma:generate",
+    "prisma:migrate": "npm --workspace apps/backend run prisma:migrate",
+    "prisma:deploy": "npm --workspace apps/backend exec prisma migrate deploy",
+    "prisma:seed": "npm --workspace apps/backend run prisma:seed"
+  },
+  "dependencies": {
+    "@nestjs/core": "11.1.24",
+    "@nestjs/platform-express": "11.1.24",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@nestjs/common": "11.1.24",
+    "@types/express": "^5.0.1"
+  },
+  "overrides": {
+    "@nestjs/common": "11.1.24",
+    "@nestjs/core": "11.1.24",
+    "@nestjs/platform-express": "11.1.24"
+  }
+}

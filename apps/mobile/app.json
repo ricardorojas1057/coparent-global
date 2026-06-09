@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Coparent Global",
+    "slug": "coparent-argentina",
+    "version": "0.5.0",
+    "scheme": "coparentglobal",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin",
+      "expo-notifications"
+    ],
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f8fafc"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ar.coparent.app"
+    },
+    "android": {
+      "package": "ar.coparent.app",
+      "versionCode": 9,
+      "permissions": [],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f766e"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://coparent-argentina-api.vercel.app",
+      "googleAndroidClientId": "30610428855-foj7hpfcptq377h8lqpnedenqa3ta1mf.apps.googleusercontent.com",
+      "googleWebClientId": "30610428855-ueh3tipa2h3aj508eufk3i4fphhd2qit.apps.googleusercontent.com",
+      "publicWebUrl": "https://coparent-global.vercel.app",
+      "eas": {
+        "projectId": "0a507625-199b-4837-868c-e5fdb7097eaa"
+      }
+    },
+    "owner": "ricardorojas33"
+  }
+}

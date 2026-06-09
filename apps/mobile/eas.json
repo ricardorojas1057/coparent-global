@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 16.25.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://coparent-argentina-api.vercel.app",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "30610428855-foj7hpfcptq377h8lqpnedenqa3ta1mf.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "30610428855-ueh3tipa2h3aj508eufk3i4fphhd2qit.apps.googleusercontent.com",
+        "EXPO_PUBLIC_WEB_URL": "https://coparent-global.vercel.app"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://coparent-argentina-api.vercel.app",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "30610428855-foj7hpfcptq377h8lqpnedenqa3ta1mf.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "30610428855-ueh3tipa2h3aj508eufk3i4fphhd2qit.apps.googleusercontent.com",
+        "EXPO_PUBLIC_WEB_URL": "https://coparent-global.vercel.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}
