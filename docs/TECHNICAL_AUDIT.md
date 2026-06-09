@@ -1,12 +1,13 @@
 # Auditoria tecnica
 
-Fecha: 8 de junio de 2026
+Fecha: 9 de junio de 2026
 
 ## Estado verificado
 
 - Backend NestJS compila.
 - Frontend Next.js compila y esta desplegado.
 - Aplicacion Expo pasa TypeScript y genera APK Android.
+- APK `0.5.1` verificada con Firebase Crashlytics incluido.
 - 13 suites y 28 pruebas backend pasan.
 - Migraciones Prisma aplicadas en PostgreSQL local y Neon.
 - Auditoria previa a GitHub no encontro secretos en archivos publicables.
@@ -19,7 +20,8 @@ Fecha: 8 de junio de 2026
 - Jest informa un worker que no finaliza limpiamente; no rompe pruebas, pero requiere investigar
   recursos abiertos.
 - Faltan pruebas end-to-end de los recorridos completos en dispositivos Android reales.
-- Crashlytics no esta activo hasta configurar credenciales privadas Firebase y consentimiento.
+- Crashlytics esta integrado con consentimiento y recoleccion desactivada por defecto; falta
+  validar la recepcion del primer reporte en Firebase desde una compilacion instalada.
 - El enlace APK de Expo es temporal. Google Play debe ser la descarga estable.
 - Las politicas legales y de privacidad requieren revision profesional por jurisdiccion.
 - El repositorio no incluye licencia de reutilizacion.
@@ -36,7 +38,7 @@ Fecha: 8 de junio de 2026
 
 ## Recomendaciones siguientes
 
-1. Configurar FCM V1 y Crashlytics con consentimiento y sin contenido familiar sensible.
+1. Configurar FCM V1 y validar la recepcion del primer reporte de Crashlytics.
 2. Publicar AAB en prueba interna de Google Play.
 3. Agregar pruebas end-to-end y pruebas de autorizacion multiusuario.
 4. Revisar dependencias moderadas y fijar una politica de actualizaciones.

@@ -13,6 +13,7 @@ MVP de coparentalidad centrado en reducir fricciones y mantener organizada la in
 - Integracion WhatsApp con confirmacion manual antes de impactar datos.
 - Preparacion offline, auditoria encadenada y controles de privacidad.
 - Notificaciones push preparadas mediante Expo Push y Firebase Cloud Messaging.
+- Crashlytics opcional, desactivado por defecto y vinculado al consentimiento de diagnostico.
 - Aplicacion Expo Android y sitio publico Next.js.
 
 ## Arquitectura
