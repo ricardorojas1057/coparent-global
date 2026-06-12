@@ -10,6 +10,11 @@ type FamilyNotification = {
   data?: Record<string, string>;
 };
 
+type ExpoPushTicket = {
+  status: 'ok' | 'error';
+  details?: { error?: string };
+};
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -72,7 +77,21 @@ export class NotificationsService {
           })),
         ),
       });
-      if (!response.ok) this.logger.warn(`Expo Push respondio ${response.status}.`);
+      if (!response.ok) {
+        this.logger.warn(`Expo Push respondio ${response.status}.`);
+        return;
+      }
+
+      const payload = (await response.json()) as { data?: ExpoPushTicket[] | ExpoPushTicket };
+      const tickets = Array.isArray(payload.data) ? payload.data : payload.data ? [payload.data] : [];
+      const invalidTokens = devices
+        .filter((_, index) => tickets[index]?.details?.error === 'DeviceNotRegistered')
+        .map(({ token }) => token);
+
+      if (invalidTokens.length > 0) {
+        await this.prisma.devicePushToken.deleteMany({ where: { token: { in: invalidTokens } } });
+        this.logger.log(`Se eliminaron ${invalidTokens.length} tokens push vencidos.`);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'error desconocido';
       this.logger.warn(`No se pudo enviar la notificacion: ${detail}`);

@@ -28,7 +28,7 @@ export function LegalPage({
           <p className="eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p className="lead">{summary}</p>
-          <p className="updated">Ultima actualizacion: 7 de junio de 2026</p>
+          <p className="updated">Ultima actualizacion: 11 de junio de 2026</p>
         </header>
         <div className="legal-body">{children}</div>
       </article>

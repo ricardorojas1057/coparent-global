@@ -2,7 +2,7 @@
   "expo": {
     "name": "Coparent Global",
     "slug": "coparent-argentina",
-    "version": "0.5.1",
+    "version": "0.6.0",
     "scheme": "coparentglobal",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "ar.coparent.app",
-      "versionCode": 10,
+      "versionCode": 13,
       "googleServicesFile": "./google-services.json",
       "permissions": [],
       "adaptiveIcon": {

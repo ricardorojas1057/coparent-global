@@ -97,7 +97,7 @@ import {
 import { cacheData, flushQueuedMutations, getCachedData, getQueuedMutations, queueMutation } from './src/offline';
 import { SupportedLanguage, translate } from './src/i18n';
 import { getExpoPushToken } from './src/notifications';
-import { configureCrashReporting } from './src/crashReporting';
+import { configureCrashReporting, sendCrashReportingTest } from './src/crashReporting';
 
 type AuthForm = {
   email: string;
@@ -1254,6 +1254,20 @@ function ProtectedScreen({
     }
   };
 
+  const validateCrashReporting = async () => {
+    if (!privacy?.settings.allowProductAnalytics) {
+      Alert.alert(t('productAnalytics'), t('diagnosticTestRequiresConsent'));
+      return;
+    }
+
+    try {
+      await sendCrashReportingTest();
+      Alert.alert(t('diagnosticTestSent'), t('diagnosticTestSentCopy'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('diagnosticTestRequiresConsent'));
+    }
+  };
+
   const manageDeletionRequest = () => {
     const hasPending = Boolean(privacy?.deletionRequest);
     Alert.alert(
@@ -1838,6 +1852,13 @@ function ProtectedScreen({
                 </View>
                 <Switch value={privacy?.settings.allowProductAnalytics ?? false} onValueChange={(value) => updatePrivacyOption('allowProductAnalytics', value)} />
               </View>
+              <Pressable
+                disabled={!privacy?.settings.allowProductAnalytics}
+                onPress={validateCrashReporting}
+                style={[styles.secondaryButton, !privacy?.settings.allowProductAnalytics && styles.disabledButton]}
+              >
+                <Text style={styles.secondaryButtonText}>{t('sendDiagnosticTest')}</Text>
+              </Pressable>
               <View style={styles.settingRow}>
                 <View style={styles.settingCopy}>
                   <Text style={styles.childName}>{t('aiProcessing')}</Text>
@@ -2382,6 +2403,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 50,
     justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.45,
   },
   secondaryButtonText: {
     color: '#0f766e',
