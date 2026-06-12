@@ -32,6 +32,22 @@ export default function AccountDeletionPage() {
         </p>
       </section>
       <section>
+        <h2>Datos compartidos</h2>
+        <p>
+          Los mensajes, eventos, gastos y auditorias compartidos con otra persona pueden conservarse o anonimizarse
+          cuando sean necesarios para mantener la integridad del registro familiar y los derechos de sus integrantes.
+          La eliminacion de una cuenta no debe borrar silenciosamente informacion que tambien pertenece a terceros.
+        </p>
+      </section>
+      <section>
+        <h2>Plazo y confirmacion</h2>
+        <p>
+          La solicitud queda registrada y su estado puede consultarse desde Perfil. Antes del lanzamiento general se
+          publicara el plazo operativo aplicable y el mecanismo de confirmacion final, sujeto a las obligaciones de
+          cada jurisdiccion.
+        </p>
+      </section>
+      <section>
         <h2>Problemas para acceder</h2>
         <p>
           Si no podes iniciar sesion, utiliza la recuperacion de contrasena y luego realiza la solicitud desde la
