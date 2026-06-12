@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "postinstall": "npm run prisma:generate",
+    "vercel-build": "npm run prisma:deploy && npm run backend:build",
     "backend:dev": "npm --workspace apps/backend run start:dev",
     "backend:build": "npm --workspace apps/backend run build",
     "backend:test": "npm --workspace apps/backend run test",
@@ -19,6 +20,7 @@
     "mobile:build:android": "npm --workspace apps/mobile run build:android",
     "mobile:submit:android": "npm --workspace apps/mobile run submit:android",
     "mobile:typecheck": "npm --workspace apps/mobile run typecheck",
+    "qa:e2e:production": "node scripts/e2e-production-smoke.mjs",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "prisma:generate": "npm --workspace apps/backend run prisma:generate",

@@ -151,6 +151,28 @@ enum WhatsAppActionStatus {
   FAILED
 }
 
+enum SubscriptionPlan {
+  BASIC
+  PLUS
+  PREMIUM
+  PROFESSIONAL
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum SubscriptionProvider {
+  MANUAL
+  GOOGLE_PLAY
+  APP_STORE
+  STRIPE
+}
+
 model Tenant {
   id          String       @id @default(uuid())
   name        String
@@ -204,7 +226,10 @@ model User {
   invitationsCreated    FamilyInvitation[]         @relation("InvitationCreator")
   invitationsAccepted   FamilyInvitation[]         @relation("InvitationAcceptor")
   devicePushTokens      DevicePushToken[]
+  emailVerificationTokens EmailVerificationToken[]
   authVersion           Int                        @default(0)
+  emailVerifiedAt       DateTime?
+  deletedAt             DateTime?
 }
 
 model DevicePushToken {
@@ -246,6 +271,31 @@ model Family {
   auditLogs          AuditLog[]
   whatsappLinks      WhatsAppLink[]
   invitations        FamilyInvitation[]
+  subscription       FamilySubscription?
+}
+
+model FamilySubscription {
+  id                     String               @id @default(uuid())
+  familyId               String               @unique
+  family                 Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  plan                   SubscriptionPlan     @default(PREMIUM)
+  status                 SubscriptionStatus   @default(TRIALING)
+  provider               SubscriptionProvider @default(MANUAL)
+  providerSubscriptionId String?              @unique
+  googlePlayProductId    String?
+  googlePlayBasePlanId   String?
+  latestOrderId          String?
+  lastVerifiedAt         DateTime?
+  trialEndsAt            DateTime?
+  currentPeriodEndsAt    DateTime?
+  cancelAtPeriodEnd      Boolean              @default(false)
+  requestedPlan          SubscriptionPlan?
+  requestedAt            DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@index([status, currentPeriodEndsAt])
+  @@index([googlePlayProductId])
 }
 
 model FamilySettings {
@@ -499,6 +549,7 @@ model ChatMessage {
   editedAt        DateTime?
   isDeleted       Boolean            @default(false)
   reads           ChatMessageRead[]
+  clientMutationId String?            @unique
 
   @@index([familyId, createdAt])
 }
@@ -539,6 +590,18 @@ model AccountDeletionRequest {
 }
 
 model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

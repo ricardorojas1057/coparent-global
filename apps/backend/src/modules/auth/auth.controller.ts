@@ -1,6 +1,14 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { ConfirmPasswordResetDto, GoogleLoginDto, LoginDto, RegisterDto, RequestPasswordResetDto } from './auth.dto';
+import {
+  ConfirmEmailVerificationDto,
+  ConfirmPasswordResetDto,
+  GoogleLoginDto,
+  LoginDto,
+  RegisterDto,
+  RequestEmailVerificationDto,
+  RequestPasswordResetDto,
+} from './auth.dto';
 import { CurrentUser } from './current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthenticatedUser } from './auth.types';
@@ -16,6 +24,12 @@ export class AuthController {
   }
   @Post('password-reset/confirm') confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
     return this.auth.confirmPasswordReset(dto);
+  }
+  @Post('email-verification/request') requestEmailVerification(@Body() dto: RequestEmailVerificationDto) {
+    return this.auth.requestEmailVerification(dto);
+  }
+  @Post('email-verification/confirm') confirmEmailVerification(@Body() dto: ConfirmEmailVerificationDto) {
+    return this.auth.confirmEmailVerification(dto);
   }
   @Get('me') @UseGuards(JwtAuthGuard) me(@CurrentUser() user: AuthenticatedUser) { return user; }
 }

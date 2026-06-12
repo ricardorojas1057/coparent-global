@@ -5,3 +5,7 @@ export class UpdatePrivacySettingsDto {
   @IsOptional() @IsBoolean() allowProductAnalytics?: boolean;
   @IsOptional() @IsBoolean() allowAiProcessing?: boolean;
 }
+
+export class ConfirmAccountDeletionDto {
+  @IsBoolean() confirm!: boolean;
+}

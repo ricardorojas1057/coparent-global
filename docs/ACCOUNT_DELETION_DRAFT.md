@@ -4,7 +4,7 @@ Este documento debe convertirse en una pagina publica antes de enviar la app a G
 
 ## Como solicitar la eliminacion
 
-Enviar una solicitud a: reemplazar por email real.
+Enviar una solicitud a: coparentglobal.soporte@gmail.com.
 
 Incluir el email de la cuenta registrada.
 
@@ -16,7 +16,10 @@ Incluir el email de la cuenta registrada.
 
 ## Plazo
 
-Completar plazo real de procesamiento.
+La solicitud se registra inmediatamente. Una vez verificada la identidad, se
+procurara completar la eliminacion o anonimizacion aplicable dentro de 30 dias
+corridos. Este compromiso debe revisarse legal y operativamente antes del
+lanzamiento general.
 
 ## Datos que pueden conservarse
 

@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateMessageDto, ReviewMessageDto } from './messages.dto';
 import { reviewCommunication } from './communication-assistant';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 const messageInclude = {
   sender: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -16,6 +17,7 @@ export class MessagesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
   ) {}
 
   async findFamilyMessages(familyId: string, userId: string) {
@@ -30,13 +32,31 @@ export class MessagesService {
 
   async create(familyId: string, dto: CreateMessageDto, userId: string) {
     const family = await this.assertMembership(familyId, userId);
-    const review = reviewCommunication(dto.content, family.settings?.locale);
+    if (dto.clientMutationId) {
+      const existing = await this.prisma.chatMessage.findUnique({
+        where: { clientMutationId: dto.clientMutationId },
+        include: messageInclude,
+      });
+      if (existing) {
+        if (existing.familyId !== familyId || existing.senderId !== userId) {
+          throw new ForbiddenException('La identificacion de esta operacion ya fue utilizada.');
+        }
+        return { message: existing, review: { needsReview: false, reasons: [], suggestion: null } };
+      }
+    }
+    const reviewEnabled = this.subscriptions
+      ? await this.subscriptions.hasEntitlement(familyId, userId, 'toneAssistant')
+      : true;
+    const review = reviewEnabled
+      ? reviewCommunication(dto.content, family.settings?.locale)
+      : { needsReview: false, reasons: [], suggestion: null };
     const message = await this.prisma.chatMessage.create({
       data: {
         familyId,
         senderId: userId,
         content: dto.content.trim(),
         category: dto.category,
+        clientMutationId: dto.clientMutationId,
         aiIntervened: review.needsReview,
         aiSuggestion: review.suggestion,
         reads: { create: { userId } },
@@ -63,6 +83,7 @@ export class MessagesService {
 
   async review(familyId: string, dto: ReviewMessageDto, userId: string) {
     const family = await this.assertMembership(familyId, userId);
+    await this.subscriptions?.assertEntitlement(familyId, userId, 'toneAssistant');
     return reviewCommunication(dto.content, dto.locale ?? family.settings?.locale);
   }
 

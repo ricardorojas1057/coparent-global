@@ -2,11 +2,20 @@ import { API_URL } from './config';
 
 export type AuthMode = 'login' | 'register';
 
-export type AuthResponse = {
+export type SessionAuthResponse = {
   accessToken: string;
   userId: string;
   email: string;
 };
+
+export type RegistrationResponse =
+  | SessionAuthResponse
+  | {
+      requiresEmailVerification: true;
+      email: string;
+      delivered: boolean;
+      message: string;
+    };
 
 export type AuthenticatedUser = {
   id: string;
@@ -89,6 +98,50 @@ export type Family = {
 };
 
 export type RelationshipMode = 'COOPERATIVE' | 'STRUCTURED' | 'HIGH_CONFLICT';
+export type SubscriptionPlan = 'BASIC' | 'PLUS' | 'PREMIUM' | 'PROFESSIONAL';
+
+export type FamilySubscriptionState = {
+  subscription: {
+    id: string;
+    familyId: string;
+    plan: SubscriptionPlan;
+    status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+    provider: 'MANUAL' | 'GOOGLE_PLAY' | 'APP_STORE' | 'STRIPE';
+    trialEndsAt: string | null;
+    currentPeriodEndsAt: string | null;
+    cancelAtPeriodEnd: boolean;
+    googlePlayProductId: string | null;
+    googlePlayBasePlanId: string | null;
+    latestOrderId: string | null;
+    lastVerifiedAt: string | null;
+    requestedPlan: SubscriptionPlan | null;
+    requestedAt: string | null;
+  };
+  effectivePlan: SubscriptionPlan;
+  entitlements: {
+    maxChildren: number | null;
+    monthlyExpenseReports: boolean;
+    receiptManagement: boolean;
+    offlineSync: boolean;
+    toneAssistant: boolean;
+    verifiedAuditExports: boolean;
+    secureGuestLinks: boolean;
+    professionalAccess: boolean;
+  };
+  catalog: Array<{
+    plan: SubscriptionPlan;
+    monthlyPriceUsd: number;
+    annualPriceUsd: number;
+    recommended: boolean;
+    contactSales: boolean;
+    googlePlayProductId: string | null;
+    featureCodes: string[];
+  }>;
+  billing: {
+    googlePlayReady: boolean;
+    familyWide: boolean;
+  };
+};
 
 export type ChildInput = {
   familyId: string;
@@ -316,22 +369,22 @@ export function executeQueuedMutation(accessToken: string, mutation: QueuedMutat
   });
 }
 
-export function login(input: LoginInput): Promise<AuthResponse> {
-  return request<AuthResponse>('/auth/login', {
+export function login(input: LoginInput): Promise<SessionAuthResponse> {
+  return request<SessionAuthResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
-export function loginWithGoogle(idToken: string): Promise<AuthResponse> {
-  return request<AuthResponse>('/auth/google', {
+export function loginWithGoogle(idToken: string): Promise<SessionAuthResponse> {
+  return request<SessionAuthResponse>('/auth/google', {
     method: 'POST',
     body: JSON.stringify({ idToken }),
   });
 }
 
-export function register(input: RegisterInput): Promise<AuthResponse> {
-  return request<AuthResponse>('/auth/register', {
+export function register(input: RegisterInput): Promise<RegistrationResponse> {
+  return request<RegistrationResponse>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -339,6 +392,13 @@ export function register(input: RegisterInput): Promise<AuthResponse> {
 
 export function requestPasswordReset(email: string): Promise<{ message: string }> {
   return request<{ message: string }>('/auth/password-reset/request', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function requestEmailVerification(email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/auth/email-verification/request', {
     method: 'POST',
     body: JSON.stringify({ email }),
   });
@@ -451,6 +511,33 @@ export function updateFamilySettings(
 ) {
   return request<NonNullable<Family['settings']>>(`/families/${familyId}/settings`, {
     method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(input),
+  });
+}
+
+export function getFamilySubscription(accessToken: string, familyId: string) {
+  return request<FamilySubscriptionState>(`/families/${familyId}/subscription`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function requestFamilyPlanChange(accessToken: string, familyId: string, plan: SubscriptionPlan) {
+  return request<FamilySubscriptionState>(`/families/${familyId}/subscription/request`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ plan }),
+  });
+}
+
+export function verifyGooglePlayPurchase(
+  accessToken: string,
+  familyId: string,
+  input: { productId: string; purchaseToken: string },
+) {
+  return request<FamilySubscriptionState>(`/families/${familyId}/subscription/google-play/verify`, {
+    method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(input),
   });
@@ -605,7 +692,7 @@ export function reviewFamilyMessage(accessToken: string, familyId: string, conte
 export function createFamilyMessage(
   accessToken: string,
   familyId: string,
-  input: { content: string; category?: FamilyMessage['category'] },
+  input: { content: string; category?: FamilyMessage['category']; clientMutationId?: string },
 ) {
   return request<{ message: FamilyMessage; review: MessageReview }>(`/families/${familyId}/messages`, {
     method: 'POST',
@@ -643,6 +730,14 @@ export function cancelAccountDeletion(accessToken: string) {
   return request<NonNullable<PrivacyState['deletionRequest']>>('/account/deletion-request', {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function confirmAccountDeletion(accessToken: string) {
+  return request<{ deleted: true }>('/account/deletion-request/confirm', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ confirm: true }),
   });
 }
 

@@ -28,14 +28,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         firstName: true,
         lastName: true,
         authVersion: true,
+        deletedAt: true,
       },
     });
 
-    if (!user || user.authVersion !== (payload.ver ?? 0)) {
+    if (!user || user.deletedAt || user.authVersion !== (payload.ver ?? 0)) {
       throw new UnauthorizedException('Usuario no encontrado.');
     }
 
-    const { authVersion: _authVersion, ...authenticatedUser } = user;
+    const { authVersion: _authVersion, deletedAt: _deletedAt, ...authenticatedUser } = user;
     return authenticatedUser;
   }
 }

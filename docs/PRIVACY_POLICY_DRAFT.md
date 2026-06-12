@@ -6,14 +6,14 @@ Este documento es un borrador operativo. Antes de publicar en Google Play, debe 
 
 Coparent Global.
 
-Contacto de privacidad: reemplazar por email real.
+Contacto de privacidad: coparentglobal.soporte@gmail.com.
 
 ## Datos que puede recopilar la app
 
 - Datos de cuenta: nombre, apellido, email, telefono opcional.
 - Datos familiares: familias, integrantes e hijos/as cargados por el usuario.
 - Datos de uso necesarios para operar el servicio.
-- En futuros modulos: calendario, gastos, comprobantes y comunicaciones entre progenitores.
+- Calendario, gastos, comprobantes y comunicaciones familiares.
 
 ## Finalidad
 
@@ -29,4 +29,4 @@ El usuario puede solicitar la baja de cuenta y eliminacion de datos desde la app
 
 ## Terceros
 
-Completar con proveedores reales antes de publicar: hosting, base de datos, storage, analytics, crash reporting y soporte.
+Proveedores actuales: Vercel, Neon, Expo/EAS, Firebase/Google y Meta/WhatsApp cuando la integracion sea activada voluntariamente.

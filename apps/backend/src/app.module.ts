@@ -13,11 +13,13 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { AccountModule } from './modules/account/account.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { validateEnvironment } from './common/config/environment';
 
 @Module({
   controllers: [HealthController],
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     AuditModule,
     AuthModule,
@@ -30,6 +32,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     MessagesModule,
     AccountModule,
     NotificationsModule,
+    SubscriptionsModule,
   ],
 })
 export class AppModule {}

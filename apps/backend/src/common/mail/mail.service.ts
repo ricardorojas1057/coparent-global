@@ -5,6 +5,10 @@ import { ConfigService } from '@nestjs/config';
 export class MailService {
   constructor(private readonly config: ConfigService) {}
 
+  isConfigured() {
+    return Boolean(this.config.get<string>('RESEND_API_KEY') && this.config.get<string>('MAIL_FROM'));
+  }
+
   publicWebUrl() {
     return this.config.get<string>('PUBLIC_WEB_URL') ?? 'https://coparent-global.vercel.app';
   }
@@ -15,6 +19,15 @@ export class MailService {
       to: email,
       subject: 'Recupera tu acceso a Coparent Global',
       text: `Solicitaste cambiar tu contrasena. Abri este enlace dentro de los proximos 30 minutos: ${url}\n\nSi no fuiste vos, ignora este mensaje.`,
+    });
+  }
+
+  async sendEmailVerification(email: string, token: string) {
+    const url = `${this.publicWebUrl()}/verify-email?token=${encodeURIComponent(token)}`;
+    return this.send({
+      to: email,
+      subject: 'Verifica tu email en Coparent Global',
+      text: `Confirma que este email te pertenece abriendo el enlace dentro de las proximas 24 horas: ${url}\n\nSi no creaste una cuenta, ignora este mensaje.`,
     });
   }
 

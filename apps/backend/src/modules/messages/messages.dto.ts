@@ -4,6 +4,7 @@ import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'cl
 export class CreateMessageDto {
   @IsString() @IsNotEmpty() @MaxLength(4000) content!: string;
   @IsOptional() @IsEnum(ChatCategory) category?: ChatCategory;
+  @IsOptional() @IsString() @MaxLength(100) clientMutationId?: string;
 }
 
 export class ReviewMessageDto {

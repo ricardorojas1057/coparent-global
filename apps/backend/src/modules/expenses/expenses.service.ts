@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateExpenseDto, ExpenseSplitMode } from './expenses.dto';
 import { AttachExpenseReceiptDto } from './expenses.dto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 const expenseInclude = {
   payer: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -20,6 +21,7 @@ export class ExpensesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
   ) {}
 
   findMine(userId: string) {
@@ -153,6 +155,7 @@ export class ExpensesService {
     if (expense.paidById !== userId) {
       throw new ForbiddenException('Solo quien registro el pago puede adjuntar el comprobante.');
     }
+    await this.subscriptions?.assertEntitlement(expense.familyId, userId, 'receiptManagement');
     const updated = await this.prisma.expense.update({
       where: { id: expenseId },
       data: {
@@ -214,6 +217,7 @@ export class ExpensesService {
   }
 
   async monthlyReport(familyId: string, month: string, userId: string) {
+    await this.subscriptions?.assertEntitlement(familyId, userId, 'monthlyExpenseReports');
     const match = /^(\d{4})-(\d{2})$/.exec(month);
     if (!match || Number(match[2]) < 1 || Number(match[2]) > 12) {
       throw new BadRequestException('El mes debe tener formato AAAA-MM.');

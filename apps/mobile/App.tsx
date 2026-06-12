@@ -2,6 +2,11 @@ import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
+import {
+  getAvailablePurchases as queryAvailablePurchases,
+  useIAP,
+  type ProductSubscription,
+} from 'expo-iap';
 import { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } from '@react-native-google-signin/google-signin';
 import {
   CalendarDays,
@@ -45,9 +50,11 @@ import {
   ExpenseSummary,
   Family,
   FamilyMessage,
+  FamilySubscriptionState,
   MessageReview,
   PrivacyState,
   RelationshipMode,
+  SubscriptionPlan,
   WhatsAppLink,
   WhatsAppLinkCode,
   WhatsAppPendingAction,
@@ -56,6 +63,7 @@ import {
   cancelAccountDeletion,
   cancelCalendarEvent,
   confirmWhatsAppAction,
+  confirmAccountDeletion,
   createCalendarEvent,
   createExpense,
   createChild,
@@ -73,6 +81,7 @@ import {
   getExpenseSummary,
   getFamilyInvitationPreview,
   getFamilyMessages,
+  getFamilySubscription,
   getMyFamilies,
   getPrivacy,
   getWhatsAppActions,
@@ -82,7 +91,9 @@ import {
   markExpenseAllocationPaid,
   requestAccountDeletion,
   requestPasswordReset,
+  requestEmailVerification,
   requestCalendarChange,
+  requestFamilyPlanChange,
   resolveCalendarChange,
   reviewFamilyMessage,
   register,
@@ -93,11 +104,20 @@ import {
   updateExpenseAllocationStatus,
   updateFamilySettings,
   updatePrivacy,
+  verifyGooglePlayPurchase,
 } from './src/api';
-import { cacheData, flushQueuedMutations, getCachedData, getQueuedMutations, queueMutation } from './src/offline';
+import {
+  cacheData,
+  clearOfflineData,
+  createMutationId,
+  flushQueuedMutations,
+  getCachedData,
+  getQueuedMutations,
+  queueMutation,
+} from './src/offline';
 import { SupportedLanguage, translate } from './src/i18n';
 import { getExpoPushToken } from './src/notifications';
-import { configureCrashReporting } from './src/crashReporting';
+import { configureCrashReporting, sendCrashReportingTest } from './src/crashReporting';
 
 type AuthForm = {
   email: string;
@@ -122,7 +142,7 @@ type BirthDateParts = {
   year: string;
 };
 
-type AppTab = 'home' | 'calendar' | 'messages' | 'expenses' | 'profile' | 'settings';
+type AppTab = 'home' | 'calendar' | 'messages' | 'expenses' | 'profile' | 'plans' | 'settings';
 
 type CalendarForm = {
   title: string;
@@ -412,18 +432,23 @@ function AppContent() {
     setIsLoading(true);
 
     try {
-      const auth =
-        mode === 'login'
-          ? await login({ email: form.email.trim(), password: form.password })
-          : await register({
-              email: form.email.trim(),
-              password: form.password,
-              firstName: form.firstName.trim(),
-              lastName: form.lastName.trim(),
-              phone: form.phone.trim() || undefined,
-            });
-
-      await completeAuth(auth);
+      if (mode === 'login') {
+        await completeAuth(await login({ email: form.email.trim(), password: form.password }));
+      } else {
+        const auth = await register({
+          email: form.email.trim(),
+          password: form.password,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          phone: form.phone.trim() || undefined,
+        });
+        if ('requiresEmailVerification' in auth) {
+          setMode('login');
+          setNotice(auth.message);
+        } else {
+          await completeAuth(auth);
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Error inesperado.');
     } finally {
@@ -480,9 +505,27 @@ function AppContent() {
     }
   };
 
+  const resendVerification = async () => {
+    if (!form.email.trim()) {
+      setError('Ingresa tu email para reenviar la verificacion.');
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+    try {
+      const result = await requestEmailVerification(form.email.trim());
+      setNotice(result.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No pudimos reenviar la verificacion.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     await GoogleSignin.signOut().catch(() => undefined);
     await SecureStore.deleteItemAsync(sessionTokenKey);
+    await clearOfflineData();
     setToken(null);
     setUser(null);
     setFamilies([]);
@@ -605,9 +648,14 @@ function AppContent() {
               <Text style={styles.googleButtonText}>Continuar con Google</Text>
             </Pressable>
             {mode === 'login' ? (
-              <Pressable accessibilityRole="button" disabled={isLoading} onPress={forgotPassword} style={styles.linkButton}>
-                <Text style={styles.linkButtonText}>Olvide mi contrasena</Text>
-              </Pressable>
+              <>
+                <Pressable accessibilityRole="button" disabled={isLoading} onPress={forgotPassword} style={styles.linkButton}>
+                  <Text style={styles.linkButtonText}>Olvide mi contrasena</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" disabled={isLoading} onPress={resendVerification} style={styles.linkButton}>
+                  <Text style={styles.linkButtonText}>Reenviar verificacion de email</Text>
+                </Pressable>
+              </>
             ) : null}
           </View>
 
@@ -680,6 +728,7 @@ function ProtectedScreen({
   onLogout: () => Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
+  const primaryFamily = families[0];
   const [familyName, setFamilyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [childForm, setChildForm] = useState<ChildForm>(initialChildForm);
@@ -710,6 +759,8 @@ function ProtectedScreen({
   const [messageReview, setMessageReview] = useState<MessageReview | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [privacy, setPrivacy] = useState<PrivacyState | null>(null);
+  const [subscriptionState, setSubscriptionState] = useState<FamilySubscriptionState | null>(null);
+  const [requestingPlan, setRequestingPlan] = useState<SubscriptionPlan | null>(null);
   const [language, setLanguage] = useState<SupportedLanguage>('es');
   const [isOnline, setIsOnline] = useState(true);
   const [queuedCount, setQueuedCount] = useState(0);
@@ -719,8 +770,41 @@ function ProtectedScreen({
   const [isWhatsAppLoading, setIsWhatsAppLoading] = useState(false);
   const [processingWhatsAppActionId, setProcessingWhatsAppActionId] = useState<string | null>(null);
   const [reviewingInvitationToken, setReviewingInvitationToken] = useState<string | null>(null);
-  const primaryFamily = families[0];
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
+  const {
+    connected: billingConnected,
+    subscriptions: playSubscriptions,
+    fetchProducts: fetchPlaySubscriptions,
+    requestPurchase: startPlayPurchase,
+    finishTransaction: finishPlayTransaction,
+  } = useIAP({
+    onPurchaseSuccess: async (purchase) => {
+      if (purchase.purchaseState === 'pending') {
+        setRequestingPlan(null);
+        Alert.alert(t('purchasePending'), t('purchasePendingCopy'));
+        return;
+      }
+      if (!primaryFamily || !purchase.purchaseToken) return;
+      try {
+        const nextState = await verifyGooglePlayPurchase(accessToken, primaryFamily.id, {
+          productId: purchase.productId,
+          purchaseToken: purchase.purchaseToken,
+        });
+        await finishPlayTransaction({ purchase, isConsumable: false });
+        setSubscriptionState(nextState);
+        await cacheData('subscription', nextState);
+        Alert.alert(t('purchaseVerified'), t('purchaseVerifiedCopy'));
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : t('purchasePendingCopy'));
+      } finally {
+        setRequestingPlan(null);
+      }
+    },
+    onPurchaseError: (purchaseError) => {
+      setRequestingPlan(null);
+      if (!purchaseError.code?.includes('cancel')) setError(purchaseError.message);
+    },
+  });
 
   useEffect(() => {
     if (!invitationToken || reviewingInvitationToken === invitationToken) return;
@@ -789,10 +873,16 @@ function ProtectedScreen({
   }, [privacy?.settings.allowProductAnalytics]);
 
   useEffect(() => {
+    if (!billingConnected || !subscriptionState?.billing.googlePlayReady) return;
+    const skus = subscriptionState.catalog.flatMap((plan) => plan.googlePlayProductId ? [plan.googlePlayProductId] : []);
+    fetchPlaySubscriptions({ skus, type: 'subs' }).catch(() => undefined);
+  }, [billingConnected, subscriptionState?.billing.googlePlayReady]);
+
+  useEffect(() => {
     const loadOperationalData = async () => {
       try {
         const reportMonth = new Date().toISOString().slice(0, 7);
-        const [events, requests, latestExpenses, latestMessages, privacyState, summary, report] = await Promise.all([
+        const [events, requests, latestExpenses, latestMessages, privacyState, summary, report, subscription] = await Promise.all([
           getCalendarEvents(accessToken),
           getCalendarChangeRequests(accessToken),
           getExpenses(accessToken),
@@ -800,6 +890,7 @@ function ProtectedScreen({
           getPrivacy(accessToken),
           primaryFamily ? getExpenseSummary(accessToken, primaryFamily.id) : Promise.resolve(null),
           primaryFamily ? getExpenseMonthlyReport(accessToken, primaryFamily.id, reportMonth) : Promise.resolve(null),
+          primaryFamily ? getFamilySubscription(accessToken, primaryFamily.id) : Promise.resolve(null),
         ]);
         setCalendarEvents(events);
         setCalendarChangeRequests(requests);
@@ -808,6 +899,7 @@ function ProtectedScreen({
         setPrivacy(privacyState);
         setExpenseSummary(summary);
         setExpenseReport(report);
+        setSubscriptionState(subscription);
         setLanguage(privacyState.settings.preferredLocale.startsWith('en') ? 'en' : 'es');
         await Promise.all([
           cacheData('calendarEvents', events),
@@ -817,9 +909,10 @@ function ProtectedScreen({
           cacheData('privacy', privacyState),
           cacheData('expenseSummary', summary),
           cacheData('expenseReport', report),
+          cacheData('subscription', subscription),
         ]);
       } catch {
-        const [events, requests, latestExpenses, latestMessages, privacyState, summary, report] = await Promise.all([
+        const [events, requests, latestExpenses, latestMessages, privacyState, summary, report, subscription] = await Promise.all([
           getCachedData<CalendarEvent[]>('calendarEvents'),
           getCachedData<CalendarChangeRequest[]>('calendarChangeRequests'),
           getCachedData<Expense[]>('expenses'),
@@ -827,6 +920,7 @@ function ProtectedScreen({
           getCachedData<PrivacyState>('privacy'),
           getCachedData<ExpenseSummary>('expenseSummary'),
           getCachedData<ExpenseMonthlyReport>('expenseReport'),
+          getCachedData<FamilySubscriptionState>('subscription'),
         ]);
         setCalendarEvents(events ?? []);
         setCalendarChangeRequests(requests ?? []);
@@ -835,6 +929,7 @@ function ProtectedScreen({
         setPrivacy(privacyState);
         setExpenseSummary(summary);
         setExpenseReport(report);
+        setSubscriptionState(subscription);
       }
     };
     loadOperationalData();
@@ -1205,7 +1300,11 @@ function ProtectedScreen({
     if (!primaryFamily || !messageContent.trim()) return;
     setIsSendingMessage(true);
     setError(null);
-    const body = { content: messageContent.trim(), category: messageCategory };
+    const body = {
+      content: messageContent.trim(),
+      category: messageCategory,
+      clientMutationId: createMutationId(),
+    };
     try {
       if (!isOnline) {
         await queueMutation({ path: `/families/${primaryFamily.id}/messages`, method: 'POST', body });
@@ -1254,6 +1353,20 @@ function ProtectedScreen({
     }
   };
 
+  const validateCrashReporting = async () => {
+    if (!privacy?.settings.allowProductAnalytics) {
+      Alert.alert(t('productAnalytics'), t('diagnosticTestRequiresConsent'));
+      return;
+    }
+
+    try {
+      await sendCrashReportingTest();
+      Alert.alert(t('diagnosticTestSent'), t('diagnosticTestSentCopy'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('diagnosticTestRequiresConsent'));
+    }
+  };
+
   const manageDeletionRequest = () => {
     const hasPending = Boolean(privacy?.deletionRequest);
     Alert.alert(
@@ -1274,6 +1387,133 @@ function ProtectedScreen({
         },
       ],
     );
+  };
+
+  const permanentlyDeleteAccount = () => {
+    Alert.alert(
+      'Eliminar cuenta definitivamente',
+      'Se cerrara tu sesion y tus datos personales seran anonimizados. Los registros familiares compartidos pueden conservarse sin tus datos personales.',
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Eliminar definitivamente',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await confirmAccountDeletion(accessToken);
+              await onLogout();
+            } catch (caught) {
+              setError(caught instanceof Error ? caught.message : 'No pudimos eliminar la cuenta.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const requestPlan = async (plan: SubscriptionPlan) => {
+    if (!primaryFamily) return;
+    if (currentFamilyMember?.role !== 'PRIMARY_PARENT') {
+      Alert.alert(t('plansAndSubscription'), t('onlyPrimaryManagesPlan'));
+      return;
+    }
+    setError(null);
+    setRequestingPlan(plan);
+    try {
+      const nextState = await requestFamilyPlanChange(accessToken, primaryFamily.id, plan);
+      setSubscriptionState(nextState);
+      await cacheData('subscription', nextState);
+      Alert.alert(t('planRequestSent'), t('planRequestSentCopy'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('planRequestSentCopy'));
+    } finally {
+      setRequestingPlan(null);
+    }
+  };
+
+  const purchasePlan = async (plan: SubscriptionPlan, basePlanId: 'monthly' | 'annual') => {
+    if (!primaryFamily) return;
+    if (currentFamilyMember?.role !== 'PRIMARY_PARENT') {
+      Alert.alert(t('plansAndSubscription'), t('onlyPrimaryManagesPlan'));
+      return;
+    }
+    if (Platform.OS !== 'android' || !billingConnected) {
+      Alert.alert(t('plansAndSubscription'), t('playStoreUnavailable'));
+      return;
+    }
+
+    const productId = subscriptionState?.catalog.find((item) => item.plan === plan)?.googlePlayProductId;
+    const product = playSubscriptions.find((item) => item.id === productId);
+    const offer = product?.subscriptionOffers?.find(
+      (item) => item.basePlanIdAndroid === basePlanId && item.offerTokenAndroid,
+    );
+    if (!productId || !offer?.offerTokenAndroid) {
+      Alert.alert(t('plansAndSubscription'), t('playStoreUnavailable'));
+      return;
+    }
+
+    setError(null);
+    setRequestingPlan(plan);
+    try {
+      const purchases = await queryAvailablePurchases();
+      const currentPurchase = purchases.find((purchase) =>
+        subscriptionState?.catalog.some((item) => item.googlePlayProductId === purchase.productId),
+      );
+      const currentRank = subscriptionPlanRank(subscriptionState?.effectivePlan ?? 'BASIC');
+      const nextRank = subscriptionPlanRank(plan);
+      await startPlayPurchase({
+        type: 'subs',
+        request: {
+          google: {
+            skus: [productId],
+            subscriptionOffers: [{ sku: productId, offerToken: offer.offerTokenAndroid }],
+            obfuscatedAccountId: primaryFamily.id,
+            obfuscatedProfileId: user.id,
+            ...(currentPurchase?.purchaseToken && currentPurchase.productId !== productId
+              ? {
+                  purchaseToken: currentPurchase.purchaseToken,
+                  replacementMode: nextRank >= currentRank ? 1 : 6,
+                }
+              : {}),
+          },
+        },
+      });
+    } catch (caught) {
+      setRequestingPlan(null);
+      setError(caught instanceof Error ? caught.message : t('playStoreUnavailable'));
+    }
+  };
+
+  const restoreGooglePlayPurchases = async () => {
+    if (!primaryFamily || Platform.OS !== 'android' || !billingConnected) {
+      Alert.alert(t('plansAndSubscription'), t('playStoreUnavailable'));
+      return;
+    }
+    setError(null);
+    try {
+      const purchases = await queryAvailablePurchases();
+      let latestState: FamilySubscriptionState | null = null;
+      for (const purchase of purchases) {
+        if (!purchase.purchaseToken || purchase.purchaseState !== 'purchased') continue;
+        if (!subscriptionState?.catalog.some((item) => item.googlePlayProductId === purchase.productId)) continue;
+        latestState = await verifyGooglePlayPurchase(accessToken, primaryFamily.id, {
+          productId: purchase.productId,
+          purchaseToken: purchase.purchaseToken,
+        });
+      }
+      if (!latestState) throw new Error(t('playStoreUnavailable'));
+      setSubscriptionState(latestState);
+      await cacheData('subscription', latestState);
+      Alert.alert(t('purchaseVerified'), t('purchaseVerifiedCopy'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('playStoreUnavailable'));
+    }
+  };
+
+  const manageGooglePlaySubscription = () => {
+    const productId = subscriptionState?.subscription.googlePlayProductId;
+    const suffix = productId ? `?sku=${encodeURIComponent(productId)}&package=ar.coparent.app` : '';
+    Linking.openURL(`https://play.google.com/store/account/subscriptions${suffix}`);
   };
 
   const refreshWhatsApp = async () => {
@@ -1838,6 +2078,13 @@ function ProtectedScreen({
                 </View>
                 <Switch value={privacy?.settings.allowProductAnalytics ?? false} onValueChange={(value) => updatePrivacyOption('allowProductAnalytics', value)} />
               </View>
+              <Pressable
+                disabled={!privacy?.settings.allowProductAnalytics}
+                onPress={validateCrashReporting}
+                style={[styles.secondaryButton, !privacy?.settings.allowProductAnalytics && styles.disabledButton]}
+              >
+                <Text style={styles.secondaryButtonText}>{t('sendDiagnosticTest')}</Text>
+              </Pressable>
               <View style={styles.settingRow}>
                 <View style={styles.settingCopy}>
                   <Text style={styles.childName}>{t('aiProcessing')}</Text>
@@ -1850,6 +2097,11 @@ function ProtectedScreen({
                   {privacy?.deletionRequest ? t('cancelDeletion') : t('requestDeletion')}
                 </Text>
               </Pressable>
+              {privacy?.deletionRequest ? (
+                <Pressable onPress={permanentlyDeleteAccount} style={styles.dangerOutlineButton}>
+                  <Text style={styles.dangerButtonText}>Eliminar cuenta definitivamente</Text>
+                </Pressable>
+              ) : null}
             </View>
             <View style={styles.card}>
               <Text style={styles.cardLabel}>{t('familySettings')}</Text>
@@ -1859,6 +2111,20 @@ function ProtectedScreen({
                 <Text style={styles.secondaryCompactText}>{t('manageFamily')}</Text>
               </Pressable>
             </View>
+            {primaryFamily && subscriptionState ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('plansAndSubscription')}</Text>
+                <Text style={styles.emptyTitle}>{subscriptionPlanName(subscriptionState.effectivePlan, t)}</Text>
+                <Text style={styles.emptyText}>
+                  {subscriptionState.subscription.status === 'TRIALING' && subscriptionState.subscription.trialEndsAt
+                    ? `${t('premiumTrial')} - ${daysUntil(subscriptionState.subscription.trialEndsAt)} ${t('trialDaysRemaining')}`
+                    : t('familyWidePlan')}
+                </Text>
+                <Pressable onPress={() => setActiveTab('plans')} style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>{t('comparePlans')}</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>{t('informationHelp')}</Text>
               <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)} style={styles.secondaryButton}>
@@ -1874,6 +2140,138 @@ function ProtectedScreen({
             <Pressable accessibilityRole="button" onPress={onLogout} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>{t('logout')}</Text>
             </Pressable>
+          </>
+        ) : null}
+
+        {activeTab === 'plans' ? (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.kicker}>{t('plans')}</Text>
+              <Text style={styles.title}>{t('plansAndSubscription')}</Text>
+              <Text style={styles.subtitle}>{t('planAccountCopy')}</Text>
+            </View>
+            {subscriptionState ? (
+              <>
+                <View style={styles.currentPlanCard}>
+                  <Text style={styles.currentPlanLabel}>{t('currentPlan')}</Text>
+                  <Text style={styles.currentPlanTitle}>{subscriptionPlanName(subscriptionState.effectivePlan, t)}</Text>
+                  <Text style={styles.currentPlanCopy}>
+                    {subscriptionState.subscription.status === 'TRIALING' && subscriptionState.subscription.trialEndsAt
+                      ? `${t('premiumTrial')} - ${daysUntil(subscriptionState.subscription.trialEndsAt)} ${t('trialDaysRemaining')}`
+                      : t('familyWidePlan')}
+                  </Text>
+                  {subscriptionState.subscription.requestedPlan ? (
+                    <Text style={styles.requestedPlanText}>
+                      {t('requested')}: {subscriptionPlanName(subscriptionState.subscription.requestedPlan, t)}
+                    </Text>
+                  ) : null}
+                </View>
+                {!subscriptionState.billing.googlePlayReady ? (
+                  <View style={styles.billingNotice}>
+                    <Text style={styles.billingNoticeTitle}>{t('billingPendingTitle')}</Text>
+                    <Text style={styles.billingNoticeCopy}>{t('billingPendingCopy')}</Text>
+                  </View>
+                ) : null}
+                {subscriptionState.catalog.map((plan) => {
+                  const isCurrent = plan.plan === subscriptionState.effectivePlan;
+                  const isRequested = plan.plan === subscriptionState.subscription.requestedPlan;
+                  const canManage = currentFamilyMember?.role === 'PRIMARY_PARENT';
+                  return (
+                    <View key={plan.plan} style={[styles.planCard, plan.recommended ? styles.recommendedPlanCard : undefined]}>
+                      <View style={styles.planHeading}>
+                        <View style={styles.planHeadingCopy}>
+                          <Text style={styles.planName}>{subscriptionPlanName(plan.plan, t)}</Text>
+                          {plan.recommended ? <Text style={styles.recommendedLabel}>{t('recommended')}</Text> : null}
+                        </View>
+                        <View style={styles.planPriceBlock}>
+                          <Text style={styles.planPrice}>
+                            {googlePlayPlanPrice(playSubscriptions, plan.googlePlayProductId, 'monthly') ??
+                              formatPlanPrice(plan.monthlyPriceUsd, t)}
+                          </Text>
+                          {plan.monthlyPriceUsd > 0 ? <Text style={styles.planPriceUnit}>{t('perMonth')}</Text> : null}
+                        </View>
+                      </View>
+                      {plan.annualPriceUsd > 0 ? (
+                        <Text style={styles.planAnnualPrice}>
+                          {googlePlayPlanPrice(playSubscriptions, plan.googlePlayProductId, 'annual') ??
+                            `USD ${plan.annualPriceUsd.toFixed(2)}`} - {t('billedAnnually')}
+                        </Text>
+                      ) : null}
+                      <View style={styles.planFeatures}>
+                        {plan.featureCodes.map((featureCode) => (
+                          <View key={featureCode} style={styles.planFeatureRow}>
+                            <Text style={styles.planFeatureMark}>+</Text>
+                            <Text style={styles.planFeatureText}>{subscriptionFeatureLabel(featureCode, t)}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {subscriptionState.billing.googlePlayReady ? (
+                        isCurrent || plan.plan === 'BASIC' ? (
+                          <Pressable
+                            disabled={!canManage}
+                            onPress={manageGooglePlaySubscription}
+                            style={[styles.secondaryButton, !canManage ? styles.disabledButton : undefined]}
+                          >
+                            <Text style={styles.secondaryButtonText}>
+                              {isCurrent && subscriptionState.subscription.provider !== 'GOOGLE_PLAY'
+                                ? t('current')
+                                : t('manageSubscription')}
+                            </Text>
+                          </Pressable>
+                        ) : (
+                          <View style={styles.planPurchaseActions}>
+                            <Pressable
+                              disabled={!canManage || requestingPlan !== null}
+                              onPress={() => purchasePlan(plan.plan, 'monthly')}
+                              style={[plan.recommended ? styles.primaryButton : styles.secondaryButton, !canManage ? styles.disabledButton : undefined]}
+                            >
+                              {requestingPlan === plan.plan ? (
+                                <ActivityIndicator color={plan.recommended ? '#ffffff' : '#0f766e'} />
+                              ) : (
+                                <Text style={plan.recommended ? styles.primaryButtonText : styles.secondaryButtonText}>{t('buyMonthly')}</Text>
+                              )}
+                            </Pressable>
+                            <Pressable
+                              disabled={!canManage || requestingPlan !== null}
+                              onPress={() => purchasePlan(plan.plan, 'annual')}
+                              style={[styles.secondaryButton, !canManage ? styles.disabledButton : undefined]}
+                            >
+                              <Text style={styles.secondaryButtonText}>{t('buyAnnual')}</Text>
+                            </Pressable>
+                          </View>
+                        )
+                      ) : (
+                        <Pressable
+                          disabled={isCurrent || isRequested || requestingPlan !== null || (!canManage && !plan.contactSales)}
+                          onPress={() => plan.contactSales ? Linking.openURL(`${PUBLIC_WEB_URL}/support`) : requestPlan(plan.plan)}
+                          style={[
+                            plan.recommended ? styles.primaryButton : styles.secondaryButton,
+                            isCurrent || isRequested || (!canManage && !plan.contactSales) ? styles.disabledButton : undefined,
+                          ]}
+                        >
+                          {requestingPlan === plan.plan ? (
+                            <ActivityIndicator color={plan.recommended ? '#ffffff' : '#0f766e'} />
+                          ) : (
+                            <Text style={plan.recommended ? styles.primaryButtonText : styles.secondaryButtonText}>
+                              {isCurrent ? t('current') : isRequested ? t('requested') : plan.contactSales ? t('contactSales') : t('requestPlan')}
+                            </Text>
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+                {subscriptionState.billing.googlePlayReady ? (
+                  <Pressable onPress={restoreGooglePlayPurchases} style={styles.secondaryButton}>
+                    <Text style={styles.secondaryButtonText}>{t('restorePurchases')}</Text>
+                  </Pressable>
+                ) : null}
+                {currentFamilyMember?.role !== 'PRIMARY_PARENT' ? <Text style={styles.legalNotice}>{t('onlyPrimaryManagesPlan')}</Text> : null}
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+              </>
+            ) : (
+              <ActivityIndicator color="#0f766e" />
+            )}
           </>
         ) : null}
 
@@ -2102,7 +2500,7 @@ function ProtectedScreen({
         <TabButton icon={CalendarDays} label={t('calendar')} active={activeTab === 'calendar'} onPress={() => setActiveTab('calendar')} />
         <TabButton icon={MessageCircle} label={t('messages')} active={activeTab === 'messages'} onPress={() => setActiveTab('messages')} />
         <TabButton icon={ReceiptText} label={t('expenses')} active={activeTab === 'expenses'} onPress={() => setActiveTab('expenses')} />
-        <TabButton icon={UserRound} label={t('profile')} active={activeTab === 'profile' || activeTab === 'settings'} onPress={() => setActiveTab('profile')} />
+        <TabButton icon={UserRound} label={t('profile')} active={activeTab === 'profile' || activeTab === 'plans' || activeTab === 'settings'} onPress={() => setActiveTab('profile')} />
       </View>
     </SafeAreaView>
   );
@@ -2224,6 +2622,71 @@ function messageCategoryLabel(
     URGENT: 'messageUrgent',
   };
   return t(keys[category]);
+}
+
+function subscriptionPlanName(
+  plan: SubscriptionPlan,
+  t: (key: Parameters<typeof translate>[1]) => string,
+) {
+  const keys: Record<SubscriptionPlan, Parameters<typeof translate>[1]> = {
+    BASIC: 'basicPlan',
+    PLUS: 'plusPlan',
+    PREMIUM: 'premiumPlan',
+    PROFESSIONAL: 'professionalPlan',
+  };
+  return t(keys[plan]);
+}
+
+function subscriptionFeatureLabel(
+  featureCode: string,
+  t: (key: Parameters<typeof translate>[1]) => string,
+) {
+  const keys: Record<string, Parameters<typeof translate>[1]> = {
+    familyCore: 'familyCore',
+    sharedCalendar: 'sharedCalendar',
+    secureMessages: 'secureMessages',
+    basicExpenses: 'basicExpenses',
+    notifications: 'notifications',
+    plusEverythingBasic: 'plusEverythingBasic',
+    unlimitedChildren: 'unlimitedChildren',
+    receipts: 'receipts',
+    monthlyReports: 'monthlyReports',
+    offlineSync: 'offlineSync',
+    premiumEverythingPlus: 'premiumEverythingPlus',
+    toneAssistant: 'toneAssistant',
+    verifiedHistory: 'verifiedHistory',
+    professionalExports: 'professionalExports',
+    secureGuestLinks: 'secureGuestLinks',
+    professionalEverythingPremium: 'professionalEverythingPremium',
+    multiFamilyWorkspace: 'multiFamilyWorkspace',
+    authorizedReadOnlyAccess: 'authorizedReadOnlyAccess',
+    professionalReports: 'professionalReports',
+  };
+  return keys[featureCode] ? t(keys[featureCode]) : featureCode;
+}
+
+function formatPlanPrice(monthlyPriceUsd: number, t: (key: Parameters<typeof translate>[1]) => string) {
+  return monthlyPriceUsd === 0 ? t('free') : `USD ${monthlyPriceUsd.toFixed(2)}`;
+}
+
+function googlePlayPlanPrice(
+  subscriptions: ProductSubscription[],
+  productId: string | null,
+  basePlanId: 'monthly' | 'annual',
+) {
+  if (!productId) return null;
+  return subscriptions
+    .find((subscription) => subscription.id === productId)
+    ?.subscriptionOffers?.find((offer) => offer.basePlanIdAndroid === basePlanId)
+    ?.displayPrice ?? null;
+}
+
+function subscriptionPlanRank(plan: SubscriptionPlan) {
+  return { BASIC: 0, PLUS: 1, PREMIUM: 2, PROFESSIONAL: 3 }[plan];
+}
+
+function daysUntil(value: string) {
+  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
 function extractInvitationToken(url: string | null) {
@@ -2383,6 +2846,9 @@ const styles = StyleSheet.create({
     minHeight: 50,
     justifyContent: 'center',
   },
+  disabledButton: {
+    opacity: 0.45,
+  },
   secondaryButtonText: {
     color: '#0f766e',
     fontSize: 16,
@@ -2458,6 +2924,130 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 6,
     padding: 18,
+  },
+  currentPlanCard: {
+    backgroundColor: '#123c36',
+    borderRadius: 8,
+    gap: 5,
+    padding: 18,
+  },
+  currentPlanLabel: {
+    color: '#b9e3dc',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  currentPlanTitle: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  currentPlanCopy: {
+    color: '#d8f1ed',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  requestedPlanText: {
+    color: '#fef3c7',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  billingNotice: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 14,
+  },
+  billingNoticeTitle: {
+    color: '#92400e',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  billingNoticeCopy: {
+    color: '#92400e',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  planCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+    padding: 18,
+  },
+  recommendedPlanCard: {
+    borderColor: '#0f766e',
+    borderWidth: 2,
+  },
+  planHeading: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  planHeadingCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  planName: {
+    color: '#172033',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  recommendedLabel: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e6f3f1',
+    borderRadius: 6,
+    color: '#0b5f59',
+    fontSize: 11,
+    fontWeight: '800',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    textTransform: 'uppercase',
+  },
+  planPriceBlock: {
+    alignItems: 'flex-end',
+  },
+  planPrice: {
+    color: '#0f766e',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  planPriceUnit: {
+    color: '#718096',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  planAnnualPrice: {
+    color: '#5d6b82',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  planFeatures: {
+    gap: 8,
+  },
+  planPurchaseActions: {
+    gap: 8,
+  },
+  planFeatureRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  planFeatureMark: {
+    color: '#0f766e',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  planFeatureText: {
+    color: '#344256',
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
   },
   cardLabel: {
     color: '#5d6b82',

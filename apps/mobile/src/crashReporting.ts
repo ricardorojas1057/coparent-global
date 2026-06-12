@@ -17,3 +17,15 @@ export async function configureCrashReporting(allowProductAnalytics: boolean) {
     log(crashlytics, 'mobile_session_started');
   }
 }
+
+export async function sendCrashReportingTest() {
+  if (Platform.OS === 'web' || !crashReportingEnabled) {
+    throw new Error('Crash reporting is not enabled.');
+  }
+
+  const { getCrashlytics, log, recordError } = await import('@react-native-firebase/crashlytics');
+  const crashlytics = getCrashlytics();
+
+  log(crashlytics, 'user_requested_diagnostic_test');
+  recordError(crashlytics, new Error('Coparent Global controlled diagnostic test'));
+}

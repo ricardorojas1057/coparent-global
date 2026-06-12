@@ -1,27 +1,35 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDto {
-  @IsEmail() email!: string;
-  @IsString() @MinLength(8) password!: string;
-  @IsString() @IsNotEmpty() firstName!: string;
-  @IsString() @IsNotEmpty() lastName!: string;
-  @IsOptional() @IsString() phone?: string;
+  @IsEmail() @MaxLength(254) email!: string;
+  @IsString() @MinLength(8) @MaxLength(128) password!: string;
+  @IsString() @IsNotEmpty() @MaxLength(80) firstName!: string;
+  @IsString() @IsNotEmpty() @MaxLength(80) lastName!: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
 }
 
 export class LoginDto {
-  @IsEmail() email!: string;
-  @IsString() @IsNotEmpty() password!: string;
+  @IsEmail() @MaxLength(254) email!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) password!: string;
 }
 
 export class RequestPasswordResetDto {
-  @IsEmail() email!: string;
+  @IsEmail() @MaxLength(254) email!: string;
 }
 
 export class ConfirmPasswordResetDto {
-  @IsString() @IsNotEmpty() token!: string;
-  @IsString() @MinLength(8) password!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) token!: string;
+  @IsString() @MinLength(8) @MaxLength(128) password!: string;
 }
 
 export class GoogleLoginDto {
-  @IsString() @IsNotEmpty() idToken!: string;
+  @IsString() @IsNotEmpty() @MaxLength(10_000) idToken!: string;
+}
+
+export class RequestEmailVerificationDto {
+  @IsEmail() @MaxLength(254) email!: string;
+}
+
+export class ConfirmEmailVerificationDto {
+  @IsString() @IsNotEmpty() @MaxLength(128) token!: string;
 }

@@ -1,14 +1,22 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { ConflictException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../common/prisma/prisma.service';
-import { ConfirmPasswordResetDto, GoogleLoginDto, LoginDto, RegisterDto, RequestPasswordResetDto } from './auth.dto';
+import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { JwtPayload } from './auth.types';
-import { Role } from '@prisma/client';
-import { MailService } from '../../common/mail/mail.service';
 import { OAuth2Client, TokenPayload } from 'google-auth-library';
+import { MailService } from '../../common/mail/mail.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import {
+  ConfirmEmailVerificationDto,
+  ConfirmPasswordResetDto,
+  GoogleLoginDto,
+  LoginDto,
+  RegisterDto,
+  RequestEmailVerificationDto,
+  RequestPasswordResetDto,
+} from './auth.dto';
+import { JwtPayload } from './auth.types';
 
 @Injectable()
 export class AuthService {
@@ -22,18 +30,40 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    if (!this.mail.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'El registro por email esta temporalmente pausado. Podes continuar con Google.',
+      );
+    }
     const exists = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (exists) throw new ConflictException('El email ya está registrado.');
+    if (exists) throw new ConflictException('El email ya esta registrado.');
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
-      data: { email: dto.email.toLowerCase(), passwordHash, firstName: dto.firstName, lastName: dto.lastName, phone: dto.phone },
+      data: {
+        email: dto.email.toLowerCase(),
+        passwordHash,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        phone: dto.phone,
+      },
     });
-    return this.issueToken(user.id, user.email, user.role, user.authVersion);
+    const delivered = await this.sendEmailVerification(user.id, user.email);
+    return {
+      requiresEmailVerification: true,
+      email: user.email,
+      delivered,
+      message: 'Revisa tu email para verificar la cuenta antes de ingresar.',
+    };
   }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) throw new UnauthorizedException('Credenciales inválidas.');
+    if (!user || user.deletedAt || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException('Credenciales invalidas.');
+    }
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedException('Primero verifica tu email. Podes solicitar un nuevo enlace desde la app.');
+    }
     return this.issueToken(user.id, user.email, user.role, user.authVersion);
   }
 
@@ -46,14 +76,16 @@ export class AuthService {
     const email = payload.email.toLowerCase();
     const existingByGoogle = await this.prisma.user.findUnique({ where: { googleSubject: payload.sub } });
     if (existingByGoogle) {
+      if (existingByGoogle.deletedAt) throw new UnauthorizedException('La cuenta no esta disponible.');
       return this.issueToken(existingByGoogle.id, existingByGoogle.email, existingByGoogle.role, existingByGoogle.authVersion);
     }
 
     const existingByEmail = await this.prisma.user.findUnique({ where: { email } });
     if (existingByEmail) {
+      if (existingByEmail.deletedAt) throw new UnauthorizedException('La cuenta no esta disponible.');
       const linked = await this.prisma.user.update({
         where: { id: existingByEmail.id },
-        data: { googleSubject: payload.sub },
+        data: { googleSubject: payload.sub, emailVerifiedAt: existingByEmail.emailVerifiedAt ?? new Date() },
       });
       return this.issueToken(linked.id, linked.email, linked.role, linked.authVersion);
     }
@@ -64,6 +96,7 @@ export class AuthService {
       data: {
         email,
         googleSubject: payload.sub,
+        emailVerifiedAt: new Date(),
         firstName: firstName || 'Google',
         lastName: lastNameParts.join(' ') || 'User',
         passwordHash: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12),
@@ -74,7 +107,7 @@ export class AuthService {
 
   async requestPasswordReset(dto: RequestPasswordResetDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (user) {
+    if (user && !user.deletedAt) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = this.hashToken(token);
       await this.prisma.passwordResetToken.create({
@@ -110,8 +143,52 @@ export class AuthService {
     return { message: 'La contrasena fue actualizada. Ya podes iniciar sesion.' };
   }
 
+  async requestEmailVerification(dto: RequestEmailVerificationDto) {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
+    if (user && !user.deletedAt && !user.emailVerifiedAt) {
+      await this.sendEmailVerification(user.id, user.email);
+    }
+    return { message: this.verificationRequestMessage() };
+  }
+
+  async confirmEmailVerification(dto: ConfirmEmailVerificationDto) {
+    const tokenHash = this.hashToken(dto.token);
+    const verification = await this.prisma.emailVerificationToken.findUnique({ where: { tokenHash } });
+    if (!verification || verification.usedAt || verification.expiresAt <= new Date()) {
+      throw new UnauthorizedException('El enlace de verificacion no es valido o ya vencio.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: verification.userId },
+        data: { emailVerifiedAt: new Date() },
+      }),
+      this.prisma.emailVerificationToken.updateMany({
+        where: { userId: verification.userId, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+    return { message: 'Email verificado. Ya podes ingresar a Coparent Global.' };
+  }
+
   private resetRequestMessage() {
     return 'Si existe una cuenta con ese email, enviaremos un enlace de recuperacion.';
+  }
+
+  private verificationRequestMessage() {
+    return 'Si la cuenta necesita verificacion, enviaremos un nuevo enlace.';
+  }
+
+  private async sendEmailVerification(userId: string, email: string) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashToken(token),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 *1000),
+      },
+    });
+    const result = await this.mail.sendEmailVerification(email, token);
+    return result.delivered;
   }
 
   private hashToken(token: string) {

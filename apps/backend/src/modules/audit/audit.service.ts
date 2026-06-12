@@ -15,24 +15,29 @@ export class AuditService {
     entityId: string;
     metadata?: Prisma.InputJsonValue;
   }) {
-    const lastLog = await this.prisma.auditLog.findFirst({ orderBy: { timestamp: 'desc' } });
-    const previousHash = lastLog?.recordHash ?? '0'.repeat(64);
-    const timestamp = new Date();
-    const payload = JSON.stringify({ ...params, timestamp: timestamp.toISOString(), previousHash });
-    const recordHash = crypto.createHash('sha256').update(payload).digest('hex');
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('coparent-audit-chain'))`;
+      const lastLog = await tx.auditLog.findFirst({
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+      });
+      const previousHash = lastLog?.recordHash ?? '0'.repeat(64);
+      const timestamp = new Date();
+      const payload = JSON.stringify({ ...params, timestamp: timestamp.toISOString(), previousHash });
+      const recordHash = crypto.createHash('sha256').update(payload).digest('hex');
 
-    return this.prisma.auditLog.create({
-      data: {
-        userId: params.userId,
-        familyId: params.familyId,
-        action: params.action,
-        entity: params.entity,
-        entityId: params.entityId,
-        timestamp,
-        previousHash,
-        recordHash,
-        metadata: params.metadata ?? {},
-      },
+      return tx.auditLog.create({
+        data: {
+          userId: params.userId,
+          familyId: params.familyId,
+          action: params.action,
+          entity: params.entity,
+          entityId: params.entityId,
+          timestamp,
+          previousHash,
+          recordHash,
+          metadata: params.metadata ?? {},
+        },
+      });
     });
   }
 }

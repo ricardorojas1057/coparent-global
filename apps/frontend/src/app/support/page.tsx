@@ -31,8 +31,10 @@ export default function SupportPage() {
       <section>
         <h2>Contacto</h2>
         <p>
-          El canal de soporte por correo se publicara antes del lanzamiento general. Durante la etapa de prueba,
-          reporta cualquier problema a la persona que te invito a probar la aplicacion.
+          Escribinos a{' '}
+          <a href="mailto:coparentglobal.soporte@gmail.com">coparentglobal.soporte@gmail.com</a>. Durante la etapa de
+          prueba, tambien podes reportar problemas a la persona que te invito. Nunca incluyas contrasenas, codigos de
+          acceso, conversaciones familiares completas ni datos innecesarios de hijos.
         </p>
       </section>
     </LegalPage>

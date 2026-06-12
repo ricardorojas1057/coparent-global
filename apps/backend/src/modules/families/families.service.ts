@@ -6,6 +6,22 @@ import { AddFamilyMemberDto, CreateFamilyDto, CreateFamilyInvitationDto, UpdateF
 import { MailService } from '../../common/mail/mail.service';
 import * as crypto from 'crypto';
 
+const publicSubscriptionSelect = {
+  id: true,
+  familyId: true,
+  plan: true,
+  status: true,
+  provider: true,
+  googlePlayProductId: true,
+  googlePlayBasePlanId: true,
+  lastVerifiedAt: true,
+  trialEndsAt: true,
+  currentPeriodEndsAt: true,
+  cancelAtPeriodEnd: true,
+  requestedPlan: true,
+  requestedAt: true,
+};
+
 @Injectable()
 export class FamiliesService {
   constructor(
@@ -28,6 +44,7 @@ export class FamiliesService {
         },
         children: true,
         settings: true,
+        subscription: { select: publicSubscriptionSelect },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -47,8 +64,13 @@ export class FamiliesService {
         tenantId: dto.tenantId,
         members: { create: { userId, role: FamilyRole.PRIMARY_PARENT } },
         settings: { create: {} },
+        subscription: {
+          create: {
+            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        },
       },
-      include: { members: true, settings: true },
+      include: { members: true, settings: true, subscription: { select: publicSubscriptionSelect } },
     });
     await this.audit.log({ userId, familyId: family.id, action: 'CREATE_FAMILY', entity: 'Family', entityId: family.id, metadata: { ...dto } });
     return family;

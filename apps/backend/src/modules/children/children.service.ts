@@ -2,11 +2,16 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { FamilyRole } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { CreateChildDto, UpdateChildDto } from './children.dto';
 
 @Injectable()
 export class ChildrenService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   async create(dto: CreateChildDto, userId: string) {
     const familyMembership = await this.prisma.familyMember.findUnique({
@@ -16,6 +21,7 @@ export class ChildrenService {
     if (!familyMembership) {
       throw new ForbiddenException('No tenes permisos para agregar hijos/as a esta familia.');
     }
+    await this.subscriptions.assertCanAddChild(dto.familyId, userId);
 
     const child = await this.prisma.child.create({
       data: { familyId: dto.familyId, firstName: dto.firstName, lastName: dto.lastName, birthDate: new Date(dto.birthDate), observations: dto.observations },

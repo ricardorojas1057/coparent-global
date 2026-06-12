@@ -3,7 +3,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccountService } from './account.service';
-import { UpdatePrivacySettingsDto } from './account.dto';
+import { ConfirmAccountDeletionDto, UpdatePrivacySettingsDto } from './account.dto';
 
 @Controller('account')
 @UseGuards(JwtAuthGuard)
@@ -28,5 +28,10 @@ export class AccountController {
   @Delete('deletion-request')
   cancelDeletion(@CurrentUser() user: AuthenticatedUser) {
     return this.account.cancelDeletion(user.id);
+  }
+
+  @Post('deletion-request/confirm')
+  confirmDeletion(@Body() dto: ConfirmAccountDeletionDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.account.completeDeletion(user.id, dto.confirm);
   }
 }

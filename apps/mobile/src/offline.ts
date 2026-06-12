@@ -1,39 +1,39 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueuedMutation } from './api';
 
-const queueKey = 'coparent.offlineQueue';
-const cachePrefix = 'coparent.cache.';
+// Sensitive family data remains only in memory until encrypted offline storage is introduced.
+const memoryCache = new Map<string, unknown>();
+let mutationQueue: QueuedMutation[] = [];
 
 export async function cacheData<T>(key: string, value: T) {
-  await AsyncStorage.setItem(`${cachePrefix}${key}`, JSON.stringify(value));
+  memoryCache.set(key, value);
 }
 
 export async function getCachedData<T>(key: string): Promise<T | null> {
-  const value = await AsyncStorage.getItem(`${cachePrefix}${key}`);
-  return value ? (JSON.parse(value) as T) : null;
+  return (memoryCache.get(key) as T | undefined) ?? null;
+}
+
+export function createMutationId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export async function queueMutation(input: Omit<QueuedMutation, 'id' | 'createdAt'>) {
-  const queue = await getQueuedMutations();
   const mutation: QueuedMutation = {
     ...input,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: createMutationId(),
     createdAt: new Date().toISOString(),
   };
-  await AsyncStorage.setItem(queueKey, JSON.stringify([...queue, mutation]));
+  mutationQueue = [...mutationQueue, mutation];
   return mutation;
 }
 
 export async function getQueuedMutations(): Promise<QueuedMutation[]> {
-  const value = await AsyncStorage.getItem(queueKey);
-  return value ? (JSON.parse(value) as QueuedMutation[]) : [];
+  return [...mutationQueue];
 }
 
 export async function flushQueuedMutations(execute: (mutation: QueuedMutation) => Promise<unknown>) {
-  const queue = await getQueuedMutations();
   const remaining: QueuedMutation[] = [];
   let synced = 0;
-  for (const mutation of queue) {
+  for (const mutation of mutationQueue) {
     try {
       await execute(mutation);
       synced += 1;
@@ -41,6 +41,11 @@ export async function flushQueuedMutations(execute: (mutation: QueuedMutation) =
       remaining.push(mutation);
     }
   }
-  await AsyncStorage.setItem(queueKey, JSON.stringify(remaining));
+  mutationQueue = remaining;
   return { synced, remaining: remaining.length };
+}
+
+export async function clearOfflineData() {
+  memoryCache.clear();
+  mutationQueue = [];
 }

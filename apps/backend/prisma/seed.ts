@@ -9,7 +9,13 @@ async function main() {
   const user = await prisma.user.upsert({
     where: { email: 'demo@coparent.ar' },
     update: {},
-    create: { email: 'demo@coparent.ar', passwordHash, firstName: 'Demo', lastName: 'Coparent' },
+    create: {
+      email: 'demo@coparent.ar',
+      passwordHash,
+      firstName: 'Demo',
+      lastName: 'Coparent',
+      emailVerifiedAt: new Date(),
+    },
   });
   const tenant = await prisma.tenant.create({ data: { name: 'Familia Demo', type: TenantType.B2C_DIRECT } });
   await prisma.tenantUser.create({ data: { tenantId: tenant.id, userId: user.id, role: TenantRole.OWNER } });
@@ -17,6 +23,9 @@ async function main() {
     data: {
       tenantId: tenant.id,
       settings: { create: {} },
+      subscription: {
+        create: { trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+      },
       members: { create: { userId: user.id, role: FamilyRole.PRIMARY_PARENT } },
     },
   });

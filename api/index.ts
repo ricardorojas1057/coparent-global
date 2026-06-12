@@ -1,8 +1,8 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express, { Request, Response } from 'express';
 import { AppModule } from '../apps/backend/src/app.module';
+import { configureApp } from '../apps/backend/src/common/config/configure-app';
 
 let cachedApp: ReturnType<typeof express> | undefined;
 
@@ -14,8 +14,7 @@ async function getApp() {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : undefined,
     rawBody: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.enableCors();
+  configureApp(app);
   await app.init();
 
   cachedApp = expressApp;
