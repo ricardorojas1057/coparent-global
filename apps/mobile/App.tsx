@@ -243,7 +243,7 @@ const initialCalendarForm: CalendarForm = {
 };
 
 const sessionTokenKey = 'coparent.sessionToken';
-const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 33})`;
+const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 34})`;
 
 const monthNames: Record<SupportedLanguage, string[]> = {
   es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
