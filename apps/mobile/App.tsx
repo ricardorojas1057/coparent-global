@@ -243,7 +243,7 @@ const initialCalendarForm: CalendarForm = {
 };
 
 const sessionTokenKey = 'coparent.sessionToken';
-const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 34})`;
+const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 35})`;
 
 const monthNames: Record<SupportedLanguage, string[]> = {
   es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
@@ -1381,8 +1381,14 @@ function ProtectedScreen({
 
   const reviewMessage = async () => {
     if (!primaryFamily || !messageContent.trim()) return;
+    const content = messageContent.trim();
+    const localReview = reviewMessageLocally(content, language);
+    if (localReview.needsReview || !isOnline) {
+      setMessageReview(localReview);
+      setMessageReviewContent(content);
+      return;
+    }
     try {
-      const content = messageContent.trim();
       setMessageReview(await reviewFamilyMessage(accessToken, primaryFamily.id, content, `${language}-${language === 'es' ? 'AR' : 'US'}`));
       setMessageReviewContent(content);
     } catch (caught) {
@@ -1395,6 +1401,14 @@ function ProtectedScreen({
     setIsSendingMessage(true);
     setError(null);
     const content = messageContent.trim();
+    const localReview = reviewMessageLocally(content, language);
+    if (localReview.needsReview && (!messageReview || messageReviewContent !== content)) {
+      setMessageReview(localReview);
+      setMessageReviewContent(content);
+      setError(t('reviewBeforeSend'));
+      setIsSendingMessage(false);
+      return;
+    }
     if (isOnline && (!messageReview || messageReviewContent !== content)) {
       try {
         const review = await reviewFamilyMessage(accessToken, primaryFamily.id, content, `${language}-${language === 'es' ? 'AR' : 'US'}`);
@@ -1406,7 +1420,8 @@ function ProtectedScreen({
           return;
         }
       } catch {
-        // If the tone review is temporarily unavailable, keep the normal send flow.
+        setMessageReview(localReview);
+        setMessageReviewContent(content);
       }
     }
     const body = {
@@ -2881,6 +2896,71 @@ function messageCategoryLabel(
     URGENT: 'messageUrgent',
   };
   return t(keys[category]);
+}
+
+const localHostileTonePatterns = [
+  /\bidiota\b/,
+  /\bimbecil\b/,
+  /\bestupid[oa]\b/,
+  /\binutil\b/,
+  /\bmierda\b/,
+  /\bforr[oa]s?\b/,
+  /\bput[ao]s?\b/,
+  /\bhij[oa]\s+de\s+put[ao]\b/,
+  /\bmal\s+parid[ao]\b/,
+  /\bmal\s+madre\b/,
+  /\bmal\s+padre\b/,
+  /\bbasura\b/,
+  /\bpelotud[oa]s?\b/,
+  /\bbolud[oa]s?\b/,
+  /\bhdp\b/,
+  /\bshut up\b/,
+  /\bidiot\b/,
+  /\bstupid\b/,
+  /\bfuck(?:ing)?\b/,
+  /\basshole\b/,
+  /\bbitch\b/,
+];
+
+const localAccusatoryTonePatterns = [
+  /\bsiempre\b/,
+  /\bnunca\b/,
+  /\btu culpa\b/,
+  /\byour fault\b/,
+  /\byou always\b/,
+  /\byou never\b/,
+];
+
+function reviewMessageLocally(content: string, language: SupportedLanguage): MessageReview {
+  const normalizedContent = normalizeToneText(content);
+  const reasons: string[] = [];
+
+  if (localHostileTonePatterns.some((pattern) => pattern.test(normalizedContent))) {
+    reasons.push(language === 'en' ? 'It contains language that may feel hostile.' : 'Contiene lenguaje que puede sentirse hostil.');
+  }
+  if (localAccusatoryTonePatterns.some((pattern) => pattern.test(normalizedContent))) {
+    reasons.push(language === 'en' ? 'It uses absolute or accusatory wording.' : 'Usa expresiones absolutas o acusatorias.');
+  }
+  if (content.length > 800) {
+    reasons.push(language === 'en' ? 'A shorter message may be easier to answer.' : 'Un mensaje mas breve puede ser mas facil de responder.');
+  }
+
+  if (!reasons.length) return { needsReview: false, reasons, suggestion: null };
+
+  return {
+    needsReview: true,
+    reasons,
+    suggestion: language === 'en'
+      ? 'I want to coordinate this for our child\'s wellbeing. Please confirm a concrete option that works for you.'
+      : 'Quiero coordinar este tema pensando en el bienestar de nuestros hijos. Por favor, confirmame una alternativa concreta para resolverlo.',
+  };
+}
+
+function normalizeToneText(content: string) {
+  return content
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function subscriptionPlanName(

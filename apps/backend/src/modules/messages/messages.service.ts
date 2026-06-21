@@ -44,12 +44,7 @@ export class MessagesService {
         return { message: existing, review: { needsReview: false, reasons: [], suggestion: null } };
       }
     }
-    const reviewEnabled = this.subscriptions
-      ? await this.subscriptions.hasEntitlement(familyId, userId, 'toneAssistant')
-      : true;
-    const review = reviewEnabled
-      ? reviewCommunication(dto.content, family.settings?.locale)
-      : { needsReview: false, reasons: [], suggestion: null };
+    const review = reviewCommunication(dto.content, family.settings?.locale);
     const message = await this.prisma.chatMessage.create({
       data: {
         familyId,
@@ -83,7 +78,6 @@ export class MessagesService {
 
   async review(familyId: string, dto: ReviewMessageDto, userId: string) {
     const family = await this.assertMembership(familyId, userId);
-    await this.subscriptions?.assertEntitlement(familyId, userId, 'toneAssistant');
     return reviewCommunication(dto.content, dto.locale ?? family.settings?.locale);
   }
 

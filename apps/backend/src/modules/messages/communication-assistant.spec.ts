@@ -26,4 +26,12 @@ describe('reviewCommunication', () => {
     expect(review.reasons).toContain('Contiene lenguaje que puede sentirse hostil.');
     expect(review.suggestion).toContain('bienestar');
   });
+
+  it('detects hostile wording with accents after normalizing text', () => {
+    const review = reviewCommunication('Sos un inútil, siempre hacés lo mismo.', 'es-AR');
+
+    expect(review.needsReview).toBe(true);
+    expect(review.reasons).toContain('Contiene lenguaje que puede sentirse hostil.');
+    expect(review.reasons).toContain('Usa expresiones absolutas o acusatorias.');
+  });
 });

@@ -27,4 +27,22 @@ describe('MessagesService idempotency', () => {
     expect(result.message).toBe(existing);
     expect(prisma.chatMessage.create).not.toHaveBeenCalled();
   });
+
+  it('reviews hostile messages without requiring a premium entitlement', async () => {
+    const prisma = {
+      family: { findFirst: jest.fn().mockResolvedValue({ id: 'family-id', settings: { locale: 'es-AR' } }) },
+    };
+    const subscriptions = { assertEntitlement: jest.fn() };
+    const service = new MessagesService(
+      prisma as never,
+      { log: jest.fn() } as never,
+      undefined,
+      subscriptions as never,
+    );
+
+    const result = await service.review('family-id', { content: 'Sos una forra de mierda.' }, 'user-id');
+
+    expect(result.needsReview).toBe(true);
+    expect(subscriptions.assertEntitlement).not.toHaveBeenCalled();
+  });
 });

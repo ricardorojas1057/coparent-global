@@ -5,47 +5,47 @@ export type CommunicationReview = {
 };
 
 const hostilePatterns = [
-  /\bidiota\b/i,
-  /\bimbecil\b/i,
-  /\bimb[eé]cil\b/i,
-  /\bestupid[oa]\b/i,
-  /\binutil\b/i,
-  /\bin[uú]til\b/i,
-  /\bmierda\b/i,
-  /\bforr[oa]s?\b/i,
-  /\bputa\b/i,
-  /\bputo\b/i,
-  /\bhij[oa]\s+de\s+puta\b/i,
-  /\bmal\s+parid[ao]\b/i,
-  /\bmal\s+madre\b/i,
-  /\bmal\s+padre\b/i,
-  /\bbasura\b/i,
-  /\bpelotud[oa]s?\b/i,
-  /\bbolud[oa]s?\b/i,
-  /\bhdp\b/i,
-  /\bshut up\b/i,
-  /\bidiot\b/i,
-  /\bstupid\b/i,
-  /\bfuck(?:ing)?\b/i,
-  /\basshole\b/i,
-  /\bbitch\b/i,
+  /\bidiota\b/,
+  /\bimbecil\b/,
+  /\bestupid[oa]\b/,
+  /\binutil\b/,
+  /\bmierda\b/,
+  /\bforr[oa]s?\b/,
+  /\bput[ao]s?\b/,
+  /\bhij[oa]\s+de\s+put[ao]\b/,
+  /\bmal\s+parid[ao]\b/,
+  /\bmal\s+madre\b/,
+  /\bmal\s+padre\b/,
+  /\bbasura\b/,
+  /\bpelotud[oa]s?\b/,
+  /\bbolud[oa]s?\b/,
+  /\bhdp\b/,
+  /\bshut up\b/,
+  /\bidiot\b/,
+  /\bstupid\b/,
+  /\bfuck(?:ing)?\b/,
+  /\basshole\b/,
+  /\bbitch\b/,
 ];
 
 const absolutePatterns = [
-  /\bsiempre\b/i,
-  /\bnunca\b/i,
-  /\btu culpa\b/i,
-  /\byour fault\b/i,
-  /\byou always\b/i,
-  /\byou never\b/i,
+  /\bsiempre\b/,
+  /\bnunca\b/,
+  /\btu culpa\b/,
+  /\byour fault\b/,
+  /\byou always\b/,
+  /\byou never\b/,
 ];
 
 export function reviewCommunication(content: string, locale = 'es-AR'): CommunicationReview {
   const reasons: string[] = [];
-  if (hostilePatterns.some((pattern) => pattern.test(content))) {
+  const normalizedContent = normalizeToneText(content);
+  const hasHostileLanguage = hostilePatterns.some((pattern) => pattern.test(normalizedContent));
+
+  if (hasHostileLanguage) {
     reasons.push(locale.startsWith('en') ? 'It contains language that may feel hostile.' : 'Contiene lenguaje que puede sentirse hostil.');
   }
-  if (absolutePatterns.some((pattern) => pattern.test(content))) {
+  if (absolutePatterns.some((pattern) => pattern.test(normalizedContent))) {
     reasons.push(locale.startsWith('en') ? 'It uses absolute or accusatory wording.' : 'Usa expresiones absolutas o acusatorias.');
   }
   if (content.length > 800) {
@@ -54,13 +54,16 @@ export function reviewCommunication(content: string, locale = 'es-AR'): Communic
 
   if (!reasons.length) return { needsReview: false, reasons, suggestion: null };
 
-  const cleaned = content
-    .replace(new RegExp(hostilePatterns.map((pattern) => pattern.source).join('|'), 'gi'), '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
   const suggestion = locale.startsWith('en')
-    ? `I would like to coordinate this for our child's wellbeing: ${cleaned}. Please confirm what option works for you.`
-    : `Quiero coordinar este tema pensando en el bienestar de nuestros hijos: ${cleaned}. Por favor, confirma que opcion te resulta posible.`;
+    ? 'I want to coordinate this for our child\'s wellbeing. Please confirm a concrete option that works for you.'
+    : 'Quiero coordinar este tema pensando en el bienestar de nuestros hijos. Por favor, confirmame una alternativa concreta para resolverlo.';
 
   return { needsReview: true, reasons, suggestion };
+}
+
+function normalizeToneText(content: string) {
+  return content
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
