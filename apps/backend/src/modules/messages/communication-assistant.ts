@@ -7,11 +7,28 @@ export type CommunicationReview = {
 const hostilePatterns = [
   /\bidiota\b/i,
   /\bimbecil\b/i,
+  /\bimb[eé]cil\b/i,
   /\bestupid[oa]\b/i,
   /\binutil\b/i,
+  /\bin[uú]til\b/i,
+  /\bmierda\b/i,
+  /\bforr[oa]s?\b/i,
+  /\bputa\b/i,
+  /\bputo\b/i,
+  /\bhij[oa]\s+de\s+puta\b/i,
+  /\bmal\s+parid[ao]\b/i,
+  /\bmal\s+madre\b/i,
+  /\bmal\s+padre\b/i,
+  /\bbasura\b/i,
+  /\bpelotud[oa]s?\b/i,
+  /\bbolud[oa]s?\b/i,
+  /\bhdp\b/i,
   /\bshut up\b/i,
   /\bidiot\b/i,
   /\bstupid\b/i,
+  /\bfuck(?:ing)?\b/i,
+  /\basshole\b/i,
+  /\bbitch\b/i,
 ];
 
 const absolutePatterns = [

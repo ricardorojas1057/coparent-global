@@ -12,10 +12,18 @@ describe('reviewCommunication', () => {
   });
 
   it('does not intervene in a clear neutral message', () => {
-    expect(reviewCommunication('¿Puedes confirmar el horario de mañana?', 'es-AR')).toEqual({
+    expect(reviewCommunication('Puedes confirmar el horario de manana?', 'es-AR')).toEqual({
       needsReview: false,
       reasons: [],
       suggestion: null,
     });
+  });
+
+  it('detects strong Spanish insults and proposes a child-centered rewrite', () => {
+    const review = reviewCommunication('Sos una hija de puta, forra de mierda.', 'es-AR');
+
+    expect(review.needsReview).toBe(true);
+    expect(review.reasons).toContain('Contiene lenguaje que puede sentirse hostil.');
+    expect(review.suggestion).toContain('bienestar');
   });
 });

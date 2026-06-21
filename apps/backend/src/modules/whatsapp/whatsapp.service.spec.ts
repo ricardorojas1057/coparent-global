@@ -29,6 +29,16 @@ function createService(overrides: Record<string, unknown> = {}) {
 }
 
 describe('WhatsAppService shared drafts', () => {
+  it('creates a link instruction with app URL and manual confirmation context', async () => {
+    const { service } = createService();
+
+    const result = await service.createLinkCode('family-id', 'user-id');
+
+    expect(result.instruction).toContain('https://coparent-global.vercel.app');
+    expect(result.instruction).toContain(`VINCULAR ${result.code}`);
+    expect(result.instruction).toContain('pendiente');
+  });
+
   it('creates a pending device-share draft without applying it to the family', async () => {
     const { service, prisma, audit } = createService();
 

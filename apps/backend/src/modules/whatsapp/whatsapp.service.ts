@@ -77,8 +77,20 @@ export class WhatsAppService {
     return {
       code,
       expiresAt,
-      instruction: `Envia VINCULAR ${code} al WhatsApp oficial de Coparent.`,
+      instruction: this.createLinkInstruction(code),
     };
+  }
+
+  private createLinkInstruction(code: string) {
+    const appUrl = this.config.get<string>('PUBLIC_WEB_URL') ?? 'https://coparent-global.vercel.app';
+    return [
+      'Te invito a vincular WhatsApp con Coparent Global.',
+      `1. Entrá a ${appUrl}`,
+      '2. Instala o abre la app.',
+      `3. Enviá este mensaje al WhatsApp oficial de Coparent: VINCULAR ${code}`,
+      '',
+      'Nada se registra automáticamente. Toda acción enviada por WhatsApp queda pendiente hasta que la confirmes dentro de la app.',
+    ].join('\n');
   }
 
   listLinks(userId: string) {
@@ -375,7 +387,7 @@ export class WhatsAppService {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
-    await this.sendText(message.from, `${this.describe(parsed.type, payload)}\nAbrí Coparent para confirmar o cancelar. Nada se registra automaticamente.`);
+    await this.sendText(message.from, `${this.describe(parsed.type, payload)}\nAbrí Coparent para confirmar o cancelar. Nada se registra automáticamente.`);
   }
 
   private async createPendingAction(params: {

@@ -39,7 +39,7 @@
     },
     "android": {
       "package": "ar.coparent.app",
-      "versionCode": 32,
+      "versionCode": 33,
       "googleServicesFile": "./google-services.json",
       "permissions": [],
       "blockedPermissions": [

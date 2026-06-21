@@ -243,7 +243,7 @@ const initialCalendarForm: CalendarForm = {
 };
 
 const sessionTokenKey = 'coparent.sessionToken';
-const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 32})`;
+const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 33})`;
 
 const monthNames: Record<SupportedLanguage, string[]> = {
   es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
@@ -293,9 +293,9 @@ function getBirthDateOptions(part: BirthDatePart, parts: BirthDateParts, languag
 }
 
 function birthDatePickerTitle(part: BirthDatePart, language: SupportedLanguage) {
-  if (part === 'day') return language === 'en' ? 'Choose day' : 'Elegir dia';
+  if (part === 'day') return language === 'en' ? 'Choose day' : 'Elegir día';
   if (part === 'month') return language === 'en' ? 'Choose month' : 'Elegir mes';
-  return language === 'en' ? 'Choose year' : 'Elegir anio';
+  return language === 'en' ? 'Choose year' : 'Elegir año';
 }
 
 function toDateInputValue(value: string) {
@@ -798,6 +798,7 @@ function ProtectedScreen({
   const [messageContent, setMessageContent] = useState('');
   const [messageCategory, setMessageCategory] = useState<FamilyMessage['category']>('LOGISTICS');
   const [messageReview, setMessageReview] = useState<MessageReview | null>(null);
+  const [messageReviewContent, setMessageReviewContent] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [privacy, setPrivacy] = useState<PrivacyState | null>(null);
   const [subscriptionState, setSubscriptionState] = useState<FamilySubscriptionState | null>(null);
@@ -1100,7 +1101,7 @@ function ProtectedScreen({
 
     const selectedBirthDate = buildBirthDate(birthDateParts);
     if (!selectedBirthDate) {
-      setError('Elegi dia, mes y anio de nacimiento.');
+      setError('Elegí día, mes y año de nacimiento.');
       return;
     }
 
@@ -1381,7 +1382,9 @@ function ProtectedScreen({
   const reviewMessage = async () => {
     if (!primaryFamily || !messageContent.trim()) return;
     try {
-      setMessageReview(await reviewFamilyMessage(accessToken, primaryFamily.id, messageContent.trim(), `${language}-${language === 'es' ? 'AR' : 'US'}`));
+      const content = messageContent.trim();
+      setMessageReview(await reviewFamilyMessage(accessToken, primaryFamily.id, content, `${language}-${language === 'es' ? 'AR' : 'US'}`));
+      setMessageReviewContent(content);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No pudimos revisar el mensaje.');
     }
@@ -1391,8 +1394,23 @@ function ProtectedScreen({
     if (!primaryFamily || !messageContent.trim()) return;
     setIsSendingMessage(true);
     setError(null);
+    const content = messageContent.trim();
+    if (isOnline && (!messageReview || messageReviewContent !== content)) {
+      try {
+        const review = await reviewFamilyMessage(accessToken, primaryFamily.id, content, `${language}-${language === 'es' ? 'AR' : 'US'}`);
+        setMessageReview(review);
+        setMessageReviewContent(content);
+        if (review.needsReview) {
+          setError(t('reviewBeforeSend'));
+          setIsSendingMessage(false);
+          return;
+        }
+      } catch {
+        // If the tone review is temporarily unavailable, keep the normal send flow.
+      }
+    }
     const body = {
-      content: messageContent.trim(),
+      content,
       category: messageCategory,
       clientMutationId: createMutationId(),
     };
@@ -1408,6 +1426,7 @@ function ProtectedScreen({
       }
       setMessageContent('');
       setMessageReview(null);
+      setMessageReviewContent('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No pudimos enviar el mensaje.');
     } finally {
@@ -1624,7 +1643,7 @@ function ProtectedScreen({
       setWhatsAppCode(await createWhatsAppLinkCode(accessToken, primaryFamily.id));
       await refreshWhatsApp();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos generar el codigo de WhatsApp.');
+      setError(caught instanceof Error ? caught.message : 'No pudimos generar el código de WhatsApp.');
     } finally {
       setIsWhatsAppLoading(false);
     }
@@ -1632,10 +1651,11 @@ function ProtectedScreen({
 
   const openWhatsApp = async () => {
     if (!whatsAppCode) return;
+    const message = buildWhatsAppLinkMessage(whatsAppCode.code);
     try {
-      await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(`VINCULAR ${whatsAppCode.code}`)}`);
+      await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(message)}`);
     } catch {
-      Alert.alert('WhatsApp no disponible', 'Instala WhatsApp o envia el codigo manualmente.');
+      Alert.alert('WhatsApp no disponible', 'Instala WhatsApp o envía el mensaje manualmente.');
     }
   };
 
@@ -1832,7 +1852,7 @@ function ProtectedScreen({
                       ))}
                     </View>
                   ) : (
-                    <Text style={styles.emptyText}>{language === 'en' ? 'No children added yet.' : 'Todavia no cargaste hijos/as.'}</Text>
+                    <Text style={styles.emptyText}>{language === 'en' ? 'No children added yet.' : 'Todavía no cargaste hijos/as.'}</Text>
                   )}
                 </View>
               </>
@@ -1878,7 +1898,7 @@ function ProtectedScreen({
               <Text style={styles.subtitle}>Registra con quien estara cada hijo/a.</Text>
             </View>
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>Proximos eventos</Text>
+              <Text style={styles.cardLabel}>Próximos eventos</Text>
               {calendarEvents.length ? calendarEvents.map((event) => (
                 <View key={event.id} style={styles.eventItem}>
                   <Text style={styles.childName}>{event.title}</Text>
@@ -1886,7 +1906,7 @@ function ProtectedScreen({
                   <Text style={styles.childDate}>{event.child.firstName} - responsable: {event.currentParent.firstName}</Text>
                   <Text style={styles.childDate}>{formatDateTime(event.startDate)} - {formatDateTime(event.endDate)}</Text>
                   {event.location ? <Text style={styles.childDate}>{event.location}</Text> : null}
-                  <Text style={event.status === 'CANCELLED' ? styles.cancelledText : styles.roleText}>{event.status}</Text>
+                  <Text style={event.status === 'CANCELLED' ? styles.cancelledText : styles.roleText}>{calendarEventStatusLabel(event.status, language)}</Text>
                   {event.status !== 'CANCELLED' ? (
                     <View style={styles.actionRow}>
                       {canDirectlyEditEvent(event) ? (
@@ -1906,7 +1926,7 @@ function ProtectedScreen({
                     </View>
                   ) : null}
                 </View>
-              )) : <Text style={styles.emptyText}>Todavia no hay eventos cargados.</Text>}
+              )) : <Text style={styles.emptyText}>Todavía no hay eventos cargados.</Text>}
             </View>
             {calendarChangeRequests.filter((request) => request.status === 'PENDING').length ? (
               <View style={styles.card}>
@@ -1982,7 +2002,7 @@ function ProtectedScreen({
               </View>
               {!changeRequestEventId ? (
                 <>
-                  <Field label="Ubicacion opcional" value={calendarForm.location} onChangeText={(value) => setCalendarForm((current) => ({ ...current, location: value }))} />
+                  <Field label="Ubicación opcional" value={calendarForm.location} onChangeText={(value) => setCalendarForm((current) => ({ ...current, location: value }))} />
                   <Field label="Notas opcionales" value={calendarForm.notes} onChangeText={(value) => setCalendarForm((current) => ({ ...current, notes: value }))} multiline />
                 </>
               ) : null}
@@ -2029,7 +2049,7 @@ function ProtectedScreen({
                   <ChoiceButton key={category} label={messageCategoryLabel(category, t)} active={messageCategory === category} onPress={() => setMessageCategory(category)} />
                 ))}
               </View>
-              <Field label={t('message')} value={messageContent} onChangeText={(value) => { setMessageContent(value); setMessageReview(null); }} multiline />
+              <Field label={t('message')} value={messageContent} onChangeText={(value) => { setMessageContent(value); setMessageReview(null); setMessageReviewContent(''); }} multiline />
               {messageReview?.needsReview ? (
                 <View style={styles.assistantNotice}>
                   <Text style={styles.assistantTitle}>{t('conflictSuggestion')}</Text>
@@ -2535,8 +2555,10 @@ function ProtectedScreen({
                   </Pressable>
                   {whatsAppCode ? (
                     <View style={styles.whatsAppCodeBox}>
-                      <Text style={styles.cardLabel}>{t('messageToSend')}</Text>
-                      <Text selectable style={styles.whatsAppCode}>VINCULAR {whatsAppCode.code}</Text>
+                      <Text style={styles.cardLabel}>{t('whatsappLinkInstruction')}</Text>
+                      <Text selectable style={styles.whatsAppCode}>{buildWhatsAppLinkMessage(whatsAppCode.code)}</Text>
+                      <Text style={styles.cardLabel}>{t('whatsappManualCode')}</Text>
+                      <Text selectable style={styles.childName}>VINCULAR {whatsAppCode.code}</Text>
                       <Text style={styles.childDate}>{t('expires')}: {formatDateTime(whatsAppCode.expiresAt)}</Text>
                       <Pressable onPress={openWhatsApp} style={styles.secondaryButton}>
                         <Text style={styles.secondaryButtonText}>{t('openWhatsApp')}</Text>
@@ -2789,6 +2811,27 @@ function familyMemberRoleLabel(role: string, language: SupportedLanguage) {
 function calendarEventTypeLabel(type: CalendarEventType, language: SupportedLanguage) {
   const option = calendarEventTypes.find((item) => item.value === type);
   return option ? (language === 'en' ? option.en : option.es) : type;
+}
+
+function calendarEventStatusLabel(status: CalendarEvent['status'], language: SupportedLanguage) {
+  const labels: Record<CalendarEvent['status'], { es: string; en: string }> = {
+    SCHEDULED: { es: 'Programado', en: 'Scheduled' },
+    COMPLETED: { es: 'Completado', en: 'Completed' },
+    CANCELLED: { es: 'Cancelado', en: 'Cancelled' },
+    MISSED: { es: 'No realizado', en: 'Missed' },
+  };
+  return labels[status]?.[language] ?? status;
+}
+
+function buildWhatsAppLinkMessage(code: string) {
+  return [
+    'Te invito a vincular WhatsApp con Coparent Global.',
+    `1. Entra a ${PUBLIC_WEB_URL}`,
+    '2. Instala o abre la app.',
+    `3. Envía este mensaje al WhatsApp oficial de Coparent: VINCULAR ${code}`,
+    '',
+    'Nada se registra automáticamente. Toda acción enviada por WhatsApp queda pendiente hasta que la confirmes dentro de la app.',
+  ].join('\n');
 }
 
 function expenseCategoryLabel(
