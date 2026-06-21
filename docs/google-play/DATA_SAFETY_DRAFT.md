@@ -1,8 +1,8 @@
 # Google Play Data Safety - respuestas preliminares
 
 Este documento prepara las respuestas de Play Console para la version Android
-0.8.0. Deben verificarse nuevamente contra el AAB final y los proveedores
-activos antes de enviar el formulario.
+0.10.0, verificada contra el binario final del 13 de junio de 2026. Debe
+confirmarse nuevamente si cambian proveedores o funciones antes de enviarlo.
 
 ## Respuestas generales
 
@@ -70,8 +70,8 @@ califica como proveedor de servicio o como dato compartido.
 
 ## Verificacion final antes del envio
 
-- [ ] Inspeccionar SDK y permisos incluidos en el AAB final.
-- [ ] Confirmar que Android solicita solo permisos necesarios.
+- [x] Inspeccionar SDK y permisos incluidos en el binario final.
+- [x] Confirmar que Android no solicita acceso general al almacenamiento ni superposicion.
 - [ ] Confirmar que Crashlytics no recopila antes del consentimiento.
 - [ ] Confirmar que las URLs publicas funcionan sin iniciar sesion.
 - [x] Implementar solicitud, cancelacion y confirmacion definitiva con anonimizacion y revocacion de acceso.

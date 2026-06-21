@@ -4,9 +4,10 @@ import { FamiliesController } from './families.controller';
 import { AuditModule } from '../audit/audit.module';
 import { MailModule } from '../../common/mail/mail.module';
 import { FamilyInvitationsController } from './family-invitations.controller';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
-  imports: [AuditModule, MailModule],
+  imports: [AuditModule, MailModule, SubscriptionsModule],
   providers: [FamiliesService],
   controllers: [FamiliesController, FamilyInvitationsController],
 })

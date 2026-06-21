@@ -2,8 +2,9 @@
   "expo": {
     "name": "Coparent Global",
     "slug": "coparent-argentina",
-    "version": "0.8.1",
+    "version": "0.10.0",
     "scheme": "coparentglobal",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -12,11 +13,20 @@
     ],
     "plugins": [
       "expo-secure-store",
-      "@react-native-google-signin/google-signin",
       "expo-notifications",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
-      "expo-iap"
+      "expo-iap",
+      [
+        "expo-share-intent",
+        {
+          "disableIOS": true,
+          "androidIntentFilters": [
+            "text/*",
+            "image/*"
+          ]
+        }
+      ]
     ],
     "splash": {
       "image": "./assets/splash.png",
@@ -29,9 +39,14 @@
     },
     "android": {
       "package": "ar.coparent.app",
-      "versionCode": 24,
+      "versionCode": 32,
       "googleServicesFile": "./google-services.json",
       "permissions": [],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f766e"

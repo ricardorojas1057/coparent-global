@@ -13,11 +13,15 @@ type InvitationPreview = {
   inviter: { firstName: string; lastName: string };
   role: string;
   emailHint: string | null;
+  guestResponse: 'INTERESTED' | 'DECLINED' | null;
+  guestRespondedAt: string | null;
 };
 
 export function InvitePreview({ token }: { token?: string }) {
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [error, setError] = useState('');
+  const [responseMessage, setResponseMessage] = useState('');
+  const [responding, setResponding] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -32,6 +36,24 @@ export function InvitePreview({ token }: { token?: string }) {
   if (error) return <p className="form-error">{error}</p>;
   if (!invitation) return <p>Revisando la invitacion...</p>;
 
+  async function respond(response: 'INTERESTED' | 'DECLINED') {
+    if (!token) return;
+    setResponding(true);
+    setError('');
+    try {
+      const result = await publicRequest<{ guestResponse: 'INTERESTED' | 'DECLINED'; guestRespondedAt: string; message: string }>(
+        `/invitations/${encodeURIComponent(token)}/respond`,
+        { method: 'POST', body: JSON.stringify({ response }) },
+      );
+      setInvitation((current) => current ? { ...current, guestResponse: result.guestResponse, guestRespondedAt: result.guestRespondedAt } : current);
+      setResponseMessage(result.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No pudimos registrar tu respuesta.');
+    } finally {
+      setResponding(false);
+    }
+  }
+
   return (
     <div className="invitation-preview">
       <dl>
@@ -42,9 +64,22 @@ export function InvitePreview({ token }: { token?: string }) {
       </dl>
       <div className="invitation-actions">
         {invitation.status === 'PENDING' && token ? (
-          <a className="primary-link" href={`coparentglobal://invite?token=${encodeURIComponent(token)}`}>
-            Abrir Coparent Global para aceptar
-          </a>
+          <>
+            <p className="fine-print">Podes responder ahora sin instalar la app. Esto no crea una cuenta ni habilita acceso familiar.</p>
+            <div className="response-actions">
+              <button disabled={responding} className="primary-link" onClick={() => respond('INTERESTED')}>
+                Quiero participar
+              </button>
+              <button disabled={responding} className="secondary-link" onClick={() => respond('DECLINED')}>
+                No participare
+              </button>
+            </div>
+            {responseMessage ? <p className="form-success">{responseMessage}</p> : null}
+            {invitation.guestResponse ? <p className="fine-print">Respuesta actual: {invitation.guestResponse === 'INTERESTED' ? 'quiero participar' : 'no participare'}.</p> : null}
+            <a className="primary-link" href={`coparentglobal://invite?token=${encodeURIComponent(token)}`}>
+              Abrir Coparent Global para aceptar definitivamente
+            </a>
+          </>
         ) : <p className="form-error">Esta invitacion ya no esta disponible para aceptar.</p>}
         <a className="secondary-link" href={androidDownloadUrl}>
           Descargar Coparent Global para Android
@@ -55,7 +90,7 @@ export function InvitePreview({ token }: { token?: string }) {
           </p>
         ) : null}
       </div>
-      <p className="fine-print">Acepta solamente si reconoces a la persona que te invito. Necesitas iniciar sesion o registrarte en la app.</p>
+      <p className="fine-print">Acepta definitivamente solamente si reconoces a la persona que te invito. El acceso familiar siempre requiere iniciar sesion o registrarse.</p>
     </div>
   );
 }

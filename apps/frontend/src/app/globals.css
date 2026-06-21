@@ -249,6 +249,12 @@ h2 {
   margin-top: 18px;
 }
 
+.response-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .secondary-link {
   align-items: center;
   border: 1px solid var(--accent);
@@ -260,6 +266,10 @@ h2 {
   min-height: 48px;
   padding: 13px 18px;
   text-decoration: none;
+}
+
+.response-actions button {
+  font: inherit;
 }
 
 .action-form button:disabled {
@@ -339,6 +349,10 @@ h2 {
   }
 
   .resource-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .response-actions {
     grid-template-columns: 1fr;
   }
 

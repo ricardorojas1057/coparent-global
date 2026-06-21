@@ -32,6 +32,11 @@ export class FamiliesController {
     return this.families.listInvitations(familyId, user.id);
   }
 
+  @Get(':id/export')
+  exportArchive(@Param('id') familyId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.families.exportArchive(familyId, user.id);
+  }
+
   @Post(':id/invitations')
   createInvitation(
     @Param('id') familyId: string,

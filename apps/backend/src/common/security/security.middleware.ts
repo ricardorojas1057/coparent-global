@@ -20,7 +20,9 @@ const policies: RateLimitPolicy[] = [
   { path: /^\/auth\/password-reset\/confirm$/, methods: ['POST'], limit: 10, windowMs: 15 * 60_000 },
   { path: /^\/auth\/email-verification\/request$/, methods: ['POST'], limit: 5, windowMs: 15 * 60_000 },
   { path: /^\/auth\/email-verification\/confirm$/, methods: ['POST'], limit: 10, windowMs: 15 * 60_000 },
-  { path: /^\/invitations\/preview$/, methods: ['GET'], limit: 60, windowMs: 60_000 },
+  { path: /^\/invitations\/[^/]+$/, methods: ['GET'], limit: 60, windowMs: 60_000 },
+  { path: /^\/invitations\/[^/]+\/respond$/, methods: ['POST'], limit: 10, windowMs: 60_000 },
+  { path: /^\/expenses\/[^/]+\/receipt-file$/, methods: ['POST'], limit: 10, windowMs: 60_000 },
   { path: /^\/whatsapp\/webhook$/, limit: 180, windowMs: 60_000 },
   { path: /^\/subscriptions\/google-play\/notifications$/, methods: ['POST'], limit: 180, windowMs: 60_000 },
 ];
@@ -38,8 +40,9 @@ export function createSecurityHeadersMiddleware() {
 }
 export function createBodySizeGuard(maxBytes = 1_000_000) {
   return (request: Request, response: Response, next: NextFunction) => {
+    const effectiveMaxBytes = /^\/expenses\/[^/]+\/receipt-file$/.test(request.path) ? 3_000_000 : maxBytes;
     const declaredLength = Number(request.headers['content-length'] ?? 0);
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    if (Number.isFinite(declaredLength) && declaredLength > effectiveMaxBytes) {
       response.status(413).json({ statusCode: 413, message: 'La solicitud supera el tamano permitido.' });
       return;
     }

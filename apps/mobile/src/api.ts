@@ -319,6 +319,7 @@ export type WhatsAppPendingAction = {
   status: 'PENDING' | 'PROCESSING' | 'CONFIRMED' | 'CANCELLED' | 'FAILED';
   originalText: string | null;
   mediaId: string | null;
+  resultEntityId: string | null;
   payload: Record<string, unknown>;
   createdAt: string;
   expiresAt: string;
@@ -326,6 +327,27 @@ export type WhatsAppPendingAction = {
     familyId: string;
     family: { tenant: { name: string } };
   };
+};
+
+export type FamilyArchive = {
+  manifest: {
+    version: number;
+    generatedAt: string;
+    algorithm: 'SHA-256';
+    digest: string;
+    notice: string;
+  };
+  data: unknown;
+};
+
+export type CreateSharedActionInput = {
+  familyId: string;
+  text?: string;
+  hasImage?: boolean;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+  fileCount?: number;
 };
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
@@ -760,6 +782,51 @@ export function getWhatsAppActions(accessToken: string): Promise<WhatsAppPending
   return request<WhatsAppPendingAction[]>('/whatsapp/actions', {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function uploadExpenseReceipt(
+  accessToken: string,
+  expenseId: string,
+  input: { dataBase64: string; mimeType: string; fileName: string },
+) {
+  return request<{ id: string; fileName: string; mimeType: string; fileSize: number; sha256: string }>(
+    `/expenses/${expenseId}/receipt-file`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function exportFamilyArchive(accessToken: string, familyId: string) {
+  return request<FamilyArchive>(`/families/${familyId}/export`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function createSharedWhatsAppAction(
+  accessToken: string,
+  input: CreateSharedActionInput,
+): Promise<WhatsAppPendingAction> {
+  return request<WhatsAppPendingAction>('/whatsapp/actions/from-share', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateWhatsAppAction(
+  accessToken: string,
+  actionId: string,
+  text: string,
+): Promise<WhatsAppPendingAction> {
+  return request<WhatsAppPendingAction>(`/whatsapp/actions/${actionId}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ text }),
   });
 }
 

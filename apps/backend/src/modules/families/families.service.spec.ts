@@ -21,4 +21,36 @@ describe('FamiliesService settings permissions', () => {
     );
     expect(prisma.familySettings.upsert).not.toHaveBeenCalled();
   });
+
+  it('exports a family archive with a SHA-256 integrity manifest', async () => {
+    const prisma = {
+      family: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'family-id',
+          tenant: { name: 'Familia Demo', type: 'B2C_DIRECT' },
+          settings: {},
+          members: [],
+          children: [],
+          expenses: [],
+          chatMessages: [],
+          auditLogs: [],
+        }),
+      },
+    };
+    const audit = { log: jest.fn().mockResolvedValue({}) };
+    const subscriptions = { assertEntitlement: jest.fn().mockResolvedValue(undefined) };
+    const service = new FamiliesService(
+      prisma as never,
+      audit as never,
+      { publicWebUrl: jest.fn(), sendFamilyInvitation: jest.fn() } as never,
+      subscriptions as never,
+    );
+
+    const archive = await service.exportArchive('family-id', 'user-id');
+
+    expect(archive.manifest.algorithm).toBe('SHA-256');
+    expect(archive.manifest.digest).toHaveLength(64);
+    expect(subscriptions.assertEntitlement).toHaveBeenCalledWith('family-id', 'user-id', 'verifiedAuditExports');
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'EXPORT_FAMILY_ARCHIVE' }));
+  });
 });

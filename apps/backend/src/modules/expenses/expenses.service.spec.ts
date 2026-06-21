@@ -136,3 +136,45 @@ describe('ExpensesService monthly report', () => {
     });
   });
 });
+
+describe('ExpensesService private receipts', () => {
+  it('stores a private receipt with a content hash', async () => {
+    const receipt = {
+      id: 'receipt-id',
+      fileName: 'ticket.png',
+      mimeType: 'image/png',
+      fileSize: 4,
+      sha256: 'placeholder',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const prisma = {
+      expense: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'expense-id',
+          familyId: 'family-id',
+          paidById: 'payer',
+          family: { members: [{ userId: 'payer' }] },
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      expenseReceipt: {
+        upsert: jest.fn().mockImplementation(({ create }) => Promise.resolve({ ...receipt, sha256: create.sha256 })),
+      },
+    };
+    const audit = { log: jest.fn() };
+    const subscriptions = { assertEntitlement: jest.fn() };
+    const service = new ExpensesService(prisma as never, audit as never, undefined, subscriptions as never);
+
+    const uploaded = await service.uploadReceiptFile(
+      'expense-id',
+      { dataBase64: Buffer.from('test').toString('base64'), mimeType: 'image/png', fileName: 'ticket.png' },
+      'payer',
+    );
+
+    expect(uploaded.sha256).toHaveLength(64);
+    expect(prisma.expenseReceipt.upsert).toHaveBeenCalled();
+    expect(subscriptions.assertEntitlement).toHaveBeenCalledWith('family-id', 'payer', 'receiptManagement');
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'UPLOAD_PRIVATE_EXPENSE_RECEIPT' }));
+  });
+});

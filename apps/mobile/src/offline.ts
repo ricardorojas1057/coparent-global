@@ -1,8 +1,31 @@
 import { QueuedMutation } from './api';
+import * as SecureStore from 'expo-secure-store';
 
-// Sensitive family data remains only in memory until encrypted offline storage is introduced.
+// Family snapshots remain in memory. Only pending mutations persist in encrypted device storage.
 const memoryCache = new Map<string, unknown>();
 let mutationQueue: QueuedMutation[] = [];
+let queueLoaded = false;
+const QUEUE_STORAGE_KEY = 'coparent.offline.mutations.v1';
+const MAX_QUEUED_MUTATIONS = 50;
+
+async function loadMutationQueue() {
+  if (queueLoaded) return;
+  queueLoaded = true;
+  try {
+    const stored = await SecureStore.getItemAsync(QUEUE_STORAGE_KEY);
+    mutationQueue = stored ? (JSON.parse(stored) as QueuedMutation[]) : [];
+  } catch {
+    mutationQueue = [];
+  }
+}
+
+async function persistMutationQueue() {
+  if (!mutationQueue.length) {
+    await SecureStore.deleteItemAsync(QUEUE_STORAGE_KEY);
+    return;
+  }
+  await SecureStore.setItemAsync(QUEUE_STORAGE_KEY, JSON.stringify(mutationQueue));
+}
 
 export async function cacheData<T>(key: string, value: T) {
   memoryCache.set(key, value);
@@ -17,20 +40,24 @@ export function createMutationId() {
 }
 
 export async function queueMutation(input: Omit<QueuedMutation, 'id' | 'createdAt'>) {
+  await loadMutationQueue();
   const mutation: QueuedMutation = {
     ...input,
     id: createMutationId(),
     createdAt: new Date().toISOString(),
   };
-  mutationQueue = [...mutationQueue, mutation];
+  mutationQueue = [...mutationQueue, mutation].slice(-MAX_QUEUED_MUTATIONS);
+  await persistMutationQueue();
   return mutation;
 }
 
 export async function getQueuedMutations(): Promise<QueuedMutation[]> {
+  await loadMutationQueue();
   return [...mutationQueue];
 }
 
 export async function flushQueuedMutations(execute: (mutation: QueuedMutation) => Promise<unknown>) {
+  await loadMutationQueue();
   const remaining: QueuedMutation[] = [];
   let synced = 0;
   for (const mutation of mutationQueue) {
@@ -42,10 +69,13 @@ export async function flushQueuedMutations(execute: (mutation: QueuedMutation) =
     }
   }
   mutationQueue = remaining;
+  await persistMutationQueue();
   return { synced, remaining: remaining.length };
 }
 
 export async function clearOfflineData() {
   memoryCache.clear();
   mutationQueue = [];
+  queueLoaded = true;
+  await SecureStore.deleteItemAsync(QUEUE_STORAGE_KEY);
 }

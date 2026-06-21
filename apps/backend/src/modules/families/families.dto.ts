@@ -1,4 +1,4 @@
-import { FamilyRole, RelationshipMode } from '@prisma/client';
+import { FamilyInvitationGuestResponse, FamilyRole, RelationshipMode } from '@prisma/client';
 import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 
 export class CreateFamilyDto {
@@ -12,6 +12,10 @@ export class AddFamilyMemberDto {
 export class CreateFamilyInvitationDto {
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsEnum(FamilyRole) role?: FamilyRole;
+}
+
+export class RespondFamilyInvitationDto {
+  @IsEnum(FamilyInvitationGuestResponse) response!: FamilyInvitationGuestResponse;
 }
 
 export class UpdateFamilySettingsDto {

@@ -19,6 +19,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { ExpensesService } from '../expenses/expenses.service';
+import { CreateSharedActionDto } from './whatsapp.dto';
 import { parseWhatsAppAction } from './whatsapp.parser';
 
 type MetaMessage = {
@@ -82,7 +83,7 @@ export class WhatsAppService {
 
   listLinks(userId: string) {
     return this.prisma.whatsAppLink.findMany({
-      where: { userId },
+      where: { userId, family: { members: { some: { userId } } } },
       select: {
         id: true,
         familyId: true,
@@ -95,11 +96,104 @@ export class WhatsAppService {
 
   listActions(userId: string) {
     return this.prisma.whatsAppPendingAction.findMany({
-      where: { link: { userId } },
+      where: { link: { userId, family: { members: { some: { userId } } } } },
       include: { link: { select: { familyId: true, family: { select: { tenant: { select: { name: true } } } } } } },
       orderBy: { createdAt: 'desc' },
       take: 30,
     });
+  }
+
+  async createSharedAction(dto: CreateSharedActionDto, userId: string) {
+    await this.assertMembership(dto.familyId, userId);
+    const text = dto.text?.trim() ?? '';
+    if (!text && !dto.hasImage) {
+      throw new BadRequestException('No encontramos texto ni una imagen para preparar.');
+    }
+
+    const link = await this.prisma.whatsAppLink.upsert({
+      where: { userId_familyId: { userId, familyId: dto.familyId } },
+      update: {},
+      create: { userId, familyId: dto.familyId },
+    });
+    const family = await this.prisma.family.findUnique({
+      where: { id: dto.familyId },
+      include: { children: true },
+    });
+    if (!family) throw new NotFoundException('No encontramos la familia.');
+
+    const action = await this.createPendingAction({
+      linkId: link.id,
+      children: family.children,
+      text,
+      hasImage: dto.hasImage === true,
+      source: 'DEVICE_SHARE',
+      externalMessageId: `device-share:${crypto.randomUUID()}`,
+      attachment: dto.hasImage ? {
+        fileName: dto.fileName ?? null,
+        mimeType: dto.mimeType ?? null,
+        fileSize: dto.fileSize ?? null,
+        fileCount: dto.fileCount ?? 1,
+        stored: false,
+      } : undefined,
+      expiresInMs: 7 * 24 * 60 * 60 * 1000,
+    });
+    await this.audit.log({
+      userId,
+      familyId: dto.familyId,
+      action: 'CREATE_DEVICE_SHARE_DRAFT',
+      entity: 'WhatsAppPendingAction',
+      entityId: action.id,
+      metadata: { type: action.type, hasImage: dto.hasImage === true },
+    });
+    return action;
+  }
+
+  async updateAction(actionId: string, text: string, userId: string) {
+    const action = await this.findOwnedAction(actionId, userId);
+    if (action.status !== WhatsAppActionStatus.PENDING) {
+      throw new BadRequestException('Solo se pueden editar acciones pendientes.');
+    }
+
+    const currentPayload = action.payload as Record<string, unknown>;
+    const attachment = currentPayload.attachment as Prisma.InputJsonObject | undefined;
+    const hasImage = Boolean(attachment || action.mediaId);
+    if (!text && !hasImage) {
+      throw new BadRequestException('El borrador necesita texto o una imagen.');
+    }
+    const family = await this.prisma.family.findUnique({
+      where: { id: action.link.familyId },
+      include: { children: true },
+    });
+    if (!family) throw new NotFoundException('No encontramos la familia.');
+
+    const parsed = parseWhatsAppAction(text, hasImage);
+    const payload: Prisma.InputJsonObject = {
+      ...this.buildPayload(parsed, family.children),
+      source: typeof currentPayload.source === 'string' ? currentPayload.source : 'DEVICE_SHARE',
+      ...(attachment ? { attachment } : {}),
+    };
+
+    const updated = await this.prisma.whatsAppPendingAction.update({
+      where: { id: action.id },
+      data: {
+        type: parsed.type,
+        originalText: text || null,
+        payload,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      include: {
+        link: { select: { familyId: true, family: { select: { tenant: { select: { name: true } } } } } },
+      },
+    });
+    await this.audit.log({
+      userId,
+      familyId: action.link.familyId,
+      action: 'EDIT_PENDING_SHARED_DRAFT',
+      entity: 'WhatsAppPendingAction',
+      entityId: action.id,
+      metadata: { type: updated.type },
+    });
+    return updated;
   }
 
   async confirmAction(actionId: string, userId: string) {
@@ -190,6 +284,13 @@ export class WhatsAppService {
     if (cancelled.count !== 1) {
       throw new BadRequestException('Solo se pueden cancelar acciones pendientes.');
     }
+    await this.audit.log({
+      userId,
+      familyId: action.link.familyId,
+      action: 'CANCEL_PENDING_SHARED_DRAFT',
+      entity: 'WhatsAppPendingAction',
+      entityId: action.id,
+    });
     await this.sendText(action.link.waId, 'La accion pendiente fue cancelada.');
     return this.prisma.whatsAppPendingAction.findUnique({ where: { id: action.id } });
   }
@@ -250,19 +351,17 @@ export class WhatsAppService {
 
     const parsed = parseWhatsAppAction(text, message.type === 'image');
     let payload: Prisma.InputJsonObject;
-    if (parsed.type === WhatsAppActionType.EXPENSE) {
-      payload = { description: parsed.description, amount: parsed.amount, category: parsed.category };
-    } else if (parsed.type === WhatsAppActionType.CALENDAR_EVENT) {
-      const child = link.family.children.find((item) =>
-        `${item.firstName} ${item.lastName}`.toLowerCase().includes(parsed.childName.toLowerCase()),
-      );
-      if (!child) {
-        await this.sendText(message.from, 'No encontre ese hijo/a en la familia. Revisa el nombre.');
+    try {
+      payload = {
+        ...this.buildPayload(parsed, link.family.children),
+        source: 'WHATSAPP',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        await this.sendText(message.from, error.message);
         return;
       }
-      payload = { childId: child.id, startDate: parsed.startDate.toISOString(), endDate: parsed.endDate.toISOString() };
-    } else {
-      payload = { content: parsed.content };
+      throw error;
     }
 
     await this.prisma.whatsAppPendingAction.create({
@@ -277,6 +376,61 @@ export class WhatsAppService {
       },
     });
     await this.sendText(message.from, `${this.describe(parsed.type, payload)}\nAbrí Coparent para confirmar o cancelar. Nada se registra automaticamente.`);
+  }
+
+  private async createPendingAction(params: {
+    linkId: string;
+    children: Array<{ id: string; firstName: string; lastName: string }>;
+    text: string;
+    hasImage: boolean;
+    source: 'DEVICE_SHARE' | 'WHATSAPP';
+    externalMessageId: string;
+    mediaId?: string;
+    attachment?: Prisma.InputJsonObject;
+    expiresInMs: number;
+  }) {
+    const parsed = parseWhatsAppAction(params.text, params.hasImage);
+    const payload: Prisma.InputJsonObject = {
+      ...this.buildPayload(parsed, params.children),
+      source: params.source,
+      ...(params.attachment ? { attachment: params.attachment } : {}),
+    };
+
+    return this.prisma.whatsAppPendingAction.create({
+      data: {
+        linkId: params.linkId,
+        externalMessageId: params.externalMessageId,
+        type: parsed.type,
+        originalText: params.text || null,
+        mediaId: params.mediaId,
+        payload,
+        expiresAt: new Date(Date.now() + params.expiresInMs),
+      },
+      include: {
+        link: { select: { familyId: true, family: { select: { tenant: { select: { name: true } } } } } },
+      },
+    });
+  }
+
+  private buildPayload(
+    parsed: ReturnType<typeof parseWhatsAppAction>,
+    children: Array<{ id: string; firstName: string; lastName: string }>,
+  ): Prisma.InputJsonObject {
+    if (parsed.type === WhatsAppActionType.EXPENSE) {
+      return { description: parsed.description, amount: parsed.amount, category: parsed.category };
+    }
+    if (parsed.type === WhatsAppActionType.CALENDAR_EVENT) {
+      const child = children.find((item) =>
+        `${item.firstName} ${item.lastName}`.toLowerCase().includes(parsed.childName.toLowerCase()),
+      );
+      if (!child) throw new BadRequestException('No encontre ese hijo/a en la familia. Revisa el nombre.');
+      return {
+        childId: child.id,
+        startDate: parsed.startDate.toISOString(),
+        endDate: parsed.endDate.toISOString(),
+      };
+    }
+    return { content: parsed.content };
   }
 
   private describe(type: WhatsAppActionType, payload: Record<string, unknown>) {
@@ -326,6 +480,7 @@ export class WhatsAppService {
     });
     if (!action) throw new NotFoundException('No encontramos la accion pendiente.');
     if (action.link.userId !== userId) throw new ForbiddenException('No tenes permisos para procesar esta accion.');
+    await this.assertMembership(action.link.familyId, userId);
     return action;
   }
 

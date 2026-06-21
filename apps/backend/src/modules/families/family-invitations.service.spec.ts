@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { FamilyRole } from '@prisma/client';
+import { FamilyInvitationGuestResponse, FamilyRole } from '@prisma/client';
 import { FamiliesService } from './families.service';
 
 describe('FamiliesService invitations', () => {
@@ -55,6 +55,39 @@ describe('FamiliesService invitations', () => {
 
     await expect(service.acceptInvitation('raw-token', 'user-id', 'other@example.com')).rejects.toBeInstanceOf(
       ForbiddenException,
+    );
+  });
+
+  it('records a guest response without creating a family membership', async () => {
+    const prisma = {
+      familyInvitation: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'invite-id',
+          familyId: 'family-id',
+          email: null,
+          role: FamilyRole.SECONDARY_PARENT,
+          status: 'PENDING',
+          expiresAt: new Date(Date.now() + 60_000),
+          family: { tenant: { name: 'Familia Demo' } },
+          invitedBy: { firstName: 'Demo', lastName: 'Parent' },
+        }),
+        update: jest.fn().mockResolvedValue({
+          guestResponse: FamilyInvitationGuestResponse.INTERESTED,
+          guestRespondedAt: new Date(),
+        }),
+      },
+    };
+    const service = new FamiliesService(
+      prisma as never,
+      { log: jest.fn() } as never,
+      { publicWebUrl: jest.fn(), sendFamilyInvitation: jest.fn() } as never,
+    );
+
+    const result = await service.respondToInvitation('raw-token', FamilyInvitationGuestResponse.INTERESTED);
+
+    expect(result.guestResponse).toBe(FamilyInvitationGuestResponse.INTERESTED);
+    expect(prisma.familyInvitation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'invite-id' } }),
     );
   });
 });

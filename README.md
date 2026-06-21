@@ -12,6 +12,7 @@ MVP de coparentalidad centrado en reducir fricciones y mantener organizada la in
 - Gastos compartidos o individuales, saldos y analisis mensual.
 - Integracion WhatsApp con confirmacion manual antes de impactar datos.
 - Preparacion offline, auditoria encadenada y controles de privacidad.
+- Respuestas limitadas a invitaciones sin cuenta, comprobantes privados y exportaciones verificables.
 - Notificaciones push preparadas mediante Expo Push y Firebase Cloud Messaging.
 - Crashlytics opcional, desactivado por defecto y vinculado al consentimiento de diagnostico.
 - Aplicacion Expo Android y sitio publico Next.js.

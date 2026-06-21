@@ -18,6 +18,12 @@ import {
 } from './auth.dto';
 import { JwtPayload } from './auth.types';
 
+type GoogleMobileCallbackQuery = {
+  code?: string;
+  state?: string;
+  error?: string;
+};
+
 @Injectable()
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
@@ -69,6 +75,50 @@ export class AuthService {
 
   async googleLogin(dto: GoogleLoginDto) {
     const payload = await this.verifyGoogleIdToken(dto.idToken);
+    return this.completeGoogleLogin(payload);
+  }
+
+  googleMobileStartUrl() {
+    const clientId = this.config.get<string>('GOOGLE_WEB_CLIENT_ID');
+    if (!clientId || !this.googleWebClientSecret()) {
+      return this.googleMobileErrorUrl('Google por navegador no esta configurado.');
+    }
+
+    const state = this.jwt.sign(
+      { typ: 'google-mobile-oauth' },
+      { expiresIn: '10m' },
+    );
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: this.googleMobileRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      prompt: 'select_account',
+      access_type: 'online',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  async googleMobileCallbackUrl(query: GoogleMobileCallbackQuery) {
+    try {
+      if (query.error) return this.googleMobileErrorUrl('Google cancelo el inicio de sesion.');
+      if (!query.code || !query.state) return this.googleMobileErrorUrl('Google no devolvio los datos necesarios.');
+      const state = this.jwt.verify<{ typ?: string }>(query.state);
+      if (state.typ !== 'google-mobile-oauth') {
+        return this.googleMobileErrorUrl('La respuesta de Google no es valida.');
+      }
+
+      const idToken = await this.exchangeGoogleCodeForIdToken(query.code);
+      const payload = await this.verifyGoogleIdToken(idToken);
+      const auth = await this.completeGoogleLogin(payload);
+      return this.googleMobileSuccessUrl(auth.accessToken);
+    } catch {
+      return this.googleMobileErrorUrl('No pudimos iniciar sesion con Google.');
+    }
+  }
+
+  private async completeGoogleLogin(payload: TokenPayload) {
     if (!payload.sub || !payload.email || !payload.email_verified) {
       throw new UnauthorizedException('No pudimos validar la cuenta de Google.');
     }
@@ -103,6 +153,29 @@ export class AuthService {
       },
     });
     return this.issueToken(user.id, user.email, user.role, user.authVersion);
+  }
+
+  private async exchangeGoogleCodeForIdToken(code: string) {
+    const clientId = this.config.get<string>('GOOGLE_WEB_CLIENT_ID');
+    const clientSecret = this.googleWebClientSecret();
+    if (!clientId || !clientSecret) throw new ServiceUnavailableException('Google por navegador no esta configurado.');
+
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: this.googleMobileRedirectUri(),
+        grant_type: 'authorization_code',
+      }),
+    });
+    const body = await response.json() as { id_token?: string };
+    if (!response.ok || !body.id_token) {
+      throw new UnauthorizedException('Google no devolvio un token de identidad.');
+    }
+    return body.id_token;
   }
 
   async requestPasswordReset(dto: RequestPasswordResetDto) {
@@ -218,6 +291,33 @@ export class AuthService {
       .flatMap((value) => value?.split(',') ?? [])
       .map((value) => value.trim())
       .filter(Boolean);
+  }
+
+  private googleWebClientSecret() {
+    return this.config.get<string>('GOOGLE_WEB_CLIENT_SECRET') ?? this.config.get<string>('GOOGLE_CLIENT_SECRET');
+  }
+
+  private googleMobileRedirectUri() {
+    return this.config.get<string>('GOOGLE_MOBILE_REDIRECT_URI') ??
+      `${this.publicApiUrl()}/auth/google/mobile/callback`;
+  }
+
+  private publicApiUrl() {
+    return (this.config.get<string>('PUBLIC_API_URL') ?? 'https://coparent-argentina-api.vercel.app').replace(/\/$/, '');
+  }
+
+  private googleMobileDeepLinkBase() {
+    return this.config.get<string>('GOOGLE_MOBILE_DEEP_LINK') ?? 'coparentglobal://auth/google';
+  }
+
+  private googleMobileSuccessUrl(accessToken: string) {
+    const params = new URLSearchParams({ accessToken });
+    return `${this.googleMobileDeepLinkBase()}?${params.toString()}`;
+  }
+
+  private googleMobileErrorUrl(message: string) {
+    const params = new URLSearchParams({ error: message });
+    return `${this.googleMobileDeepLinkBase()}?${params.toString()}`;
   }
 
   private issueToken(userId: string, email: string, role: Role, authVersion: number) {

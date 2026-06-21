@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query, RawBodyRequest, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, RawBodyRequest, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateWhatsAppLinkCodeDto } from './whatsapp.dto';
+import { CreateSharedActionDto, CreateWhatsAppLinkCodeDto, UpdatePendingActionDto } from './whatsapp.dto';
 import { WhatsAppService } from './whatsapp.service';
 
 @Controller('whatsapp')
@@ -40,6 +40,22 @@ export class WhatsAppController {
   @UseGuards(JwtAuthGuard)
   actions(@CurrentUser() user: AuthenticatedUser) {
     return this.whatsapp.listActions(user.id);
+  }
+
+  @Post('actions/from-share')
+  @UseGuards(JwtAuthGuard)
+  createFromShare(@Body() dto: CreateSharedActionDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.whatsapp.createSharedAction(dto, user.id);
+  }
+
+  @Patch('actions/:id')
+  @UseGuards(JwtAuthGuard)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePendingActionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.whatsapp.updateAction(id, dto.text, user.id);
   }
 
   @Post('actions/:id/confirm')

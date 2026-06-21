@@ -17,13 +17,14 @@ obtener evidencia util y preparar la solicitud de acceso a produccion.
 1. Instalar la app desde el enlace de testing cerrado de Google Play.
 2. Registrarse o ingresar con Google.
 3. Crear o aceptar una invitacion a una familia de demostracion.
-4. Agregar un hijo ficticio.
-5. Crear un evento, asignar responsable y solicitar un cambio.
-6. Enviar un mensaje familiar.
-7. Registrar un gasto compartido y uno pagado por una sola parte.
-8. Revisar saldos y reporte mensual.
-9. Cambiar idioma entre espanol e ingles.
-10. Revisar privacidad y localizar la solicitud de eliminacion.
+4. Abrir una segunda invitacion desde el navegador y responder sin instalar la app.
+5. Agregar un hijo ficticio.
+6. Crear un evento, asignar responsable y solicitar un cambio.
+7. Enviar un mensaje familiar.
+8. Registrar un gasto compartido, uno individual y un comprobante privado.
+9. Revisar saldos, reporte mensual y exportacion verificable.
+10. Cambiar idioma entre espanol e ingles.
+11. Revisar privacidad y localizar la solicitud de eliminacion.
 
 ## Calendario de 14 dias
 
@@ -49,6 +50,8 @@ obtener evidencia util y preparar la solicitud de acceso a produccion.
 - [ ] Al menos 12 testers permanecieron inscritos durante 14 dias consecutivos.
 - [ ] No hay fallos bloqueantes en registro, ingreso o invitaciones.
 - [ ] Calendario, mensajes y gastos fueron probados con dos cuentas.
+- [ ] Invitaciones web no conceden acceso familiar sin autenticacion.
+- [ ] Comprobantes privados y exportaciones rechazaron cuentas ajenas.
 - [ ] La eliminacion de cuenta puede solicitarse desde la app y la web.
 - [ ] Politica de privacidad, soporte y terminos estan publicados.
 - [ ] Data Safety coincide con el AAB final.

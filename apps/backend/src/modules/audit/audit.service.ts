@@ -16,7 +16,7 @@ export class AuditService {
     metadata?: Prisma.InputJsonValue;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('coparent-audit-chain'))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('coparent-audit-chain'))`;
       const lastLog = await tx.auditLog.findFirst({
         orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
       });

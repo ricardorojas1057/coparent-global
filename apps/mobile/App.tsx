@@ -1,5 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
+import { useShareIntent, type ShareIntent } from 'expo-share-intent';
 import { useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import {
@@ -7,7 +10,6 @@ import {
   useIAP,
   type ProductSubscription,
 } from 'expo-iap';
-import { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } from '@react-native-google-signin/google-signin';
 import {
   CalendarDays,
   Home,
@@ -36,7 +38,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_URL, GOOGLE_WEB_CLIENT_ID, PUBLIC_WEB_URL } from './src/config';
+import { API_URL, PUBLIC_WEB_URL } from './src/config';
 import {
   AuthMode,
   AuthenticatedUser,
@@ -71,8 +73,10 @@ import {
   createFamilyInvitation,
   createFamilyMessage,
   createTenant,
+  createSharedWhatsAppAction,
   createWhatsAppLinkCode,
   executeQueuedMutation,
+  exportFamilyArchive,
   getCurrentUser,
   getCalendarChangeRequests,
   getCalendarEvents,
@@ -87,7 +91,6 @@ import {
   getWhatsAppActions,
   getWhatsAppLinks,
   login,
-  loginWithGoogle,
   markExpenseAllocationPaid,
   requestAccountDeletion,
   requestPasswordReset,
@@ -104,6 +107,8 @@ import {
   updateExpenseAllocationStatus,
   updateFamilySettings,
   updatePrivacy,
+  updateWhatsAppAction,
+  uploadExpenseReceipt,
   verifyGooglePlayPurchase,
 } from './src/api';
 import {
@@ -144,6 +149,13 @@ type BirthDateParts = {
 
 type AppTab = 'home' | 'calendar' | 'messages' | 'expenses' | 'profile' | 'plans' | 'settings';
 
+type SharedReceiptFile = {
+  fileName: string;
+  mimeType: string;
+  path: string;
+  size: number | null;
+};
+
 type CalendarForm = {
   title: string;
   type: CalendarEventType;
@@ -168,14 +180,14 @@ type ExpenseForm = {
   receiptReference: string;
 };
 
-const expenseCategories: Array<{ value: ExpenseCategory; label: string }> = [
-  { value: 'SCHOOL', label: 'Escuela' },
-  { value: 'HEALTH', label: 'Salud' },
-  { value: 'CLOTHING', label: 'Ropa' },
-  { value: 'TRANSPORT', label: 'Transporte' },
-  { value: 'FOOD', label: 'Comida' },
-  { value: 'EXTRACURRICULAR', label: 'Actividad' },
-  { value: 'OTHER', label: 'Otro' },
+const expenseCategories: Array<{ value: ExpenseCategory; key: Parameters<typeof translate>[1] }> = [
+  { value: 'SCHOOL', key: 'expenseSchool' },
+  { value: 'HEALTH', key: 'expenseHealth' },
+  { value: 'CLOTHING', key: 'expenseClothing' },
+  { value: 'TRANSPORT', key: 'expenseTransport' },
+  { value: 'FOOD', key: 'expenseFood' },
+  { value: 'EXTRACURRICULAR', key: 'expenseExtracurricular' },
+  { value: 'OTHER', key: 'expenseOther' },
 ];
 
 const calendarEventTypes: Array<{ value: CalendarEventType; es: string; en: string }> = [
@@ -231,6 +243,7 @@ const initialCalendarForm: CalendarForm = {
 };
 
 const sessionTokenKey = 'coparent.sessionToken';
+const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 32})`;
 
 const monthNames: Record<SupportedLanguage, string[]> = {
   es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
@@ -329,14 +342,39 @@ function getCalendarPickerOptions(field: CalendarPickerField, language: Supporte
 }
 
 export default function App() {
+  const {
+    hasShareIntent,
+    shareIntent,
+    resetShareIntent,
+    error: shareIntentError,
+  } = useShareIntent({
+    disabled: Platform.OS === 'web' || Constants.appOwnership === 'expo',
+    resetOnBackground: false,
+  });
+
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <AppContent
+        hasShareIntent={hasShareIntent}
+        shareIntent={shareIntent}
+        resetShareIntent={resetShareIntent}
+        shareIntentError={shareIntentError}
+      />
     </SafeAreaProvider>
   );
 }
 
-function AppContent() {
+function AppContent({
+  hasShareIntent,
+  shareIntent,
+  resetShareIntent,
+  shareIntentError,
+}: {
+  hasShareIntent: boolean;
+  shareIntent: ShareIntent | null;
+  resetShareIntent: () => void;
+  shareIntentError: string | null;
+}) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [form, setForm] = useState<AuthForm>(initialForm);
   const [token, setToken] = useState<string | null>(null);
@@ -388,24 +426,28 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!GOOGLE_WEB_CLIENT_ID) return;
-    GoogleSignin.configure({
-      webClientId: GOOGLE_WEB_CLIENT_ID,
-      offlineAccess: false,
-      scopes: ['profile', 'email'],
-    });
-  }, []);
+    const captureDeepLink = (url: string | null) => {
+      const googleAuth = extractGoogleAuthResult(url);
+      if (googleAuth?.accessToken) {
+        setNotice('Sesion de Google confirmada. Preparando tu espacio familiar...');
+        completeAuth({ accessToken: googleAuth.accessToken }).catch((caught) => {
+          setError(caught instanceof Error ? caught.message : 'No pudimos completar el inicio con Google.');
+        });
+        return;
+      }
+      if (googleAuth?.error) {
+        setError(googleAuth.error);
+        return;
+      }
 
-  useEffect(() => {
-    const captureInvitation = (url: string | null) => {
       const invitationToken = extractInvitationToken(url);
       if (invitationToken) {
         setPendingInvitationToken(invitationToken);
         setNotice('Invitacion detectada. Inicia sesion o registrate para revisarla.');
       }
     };
-    Linking.getInitialURL().then(captureInvitation);
-    const subscription = Linking.addEventListener('url', ({ url }) => captureInvitation(url));
+    Linking.getInitialURL().then(captureDeepLink);
+    const subscription = Linking.addEventListener('url', ({ url }) => captureDeepLink(url));
     return () => subscription.remove();
   }, []);
 
@@ -459,33 +501,20 @@ function AppContent() {
   const submitGoogle = async () => {
     setError(null);
     setNotice(null);
-    if (!GOOGLE_WEB_CLIENT_ID) {
-      Alert.alert(
-        'Google Sign-In pendiente',
-        'Falta cargar el Client ID de Google Cloud. La app ya esta preparada; despues lo activamos desde Google Cloud Console.',
-      );
-      return;
-    }
-
     setIsLoading(true);
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const response = await GoogleSignin.signIn();
-      if (!isSuccessResponse(response)) return;
-      if (!response.data.idToken) throw new Error('Google no devolvio un token de identidad.');
-      await completeAuth(await loginWithGoogle(response.data.idToken));
+      await startGoogleBrowserLogin();
     } catch (caught) {
-      if (isErrorWithCode(caught)) {
-        if (caught.code === statusCodes.SIGN_IN_CANCELLED) return;
-        if (caught.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          setError('Google Play Services no esta disponible o necesita actualizarse.');
-          return;
-        }
-      }
-      setError(caught instanceof Error ? caught.message : 'No pudimos iniciar sesion con Google.');
+      setError(caught instanceof Error ? caught.message : 'No pudimos abrir Google en el navegador.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const startGoogleBrowserLogin = async () => {
+    const startUrl = `${API_URL.replace(/\/$/, '')}/auth/google/mobile/start`;
+    setNotice('Abrimos Google en el navegador para completar el ingreso.');
+    await Linking.openURL(startUrl);
   };
 
   const forgotPassword = async () => {
@@ -523,7 +552,6 @@ function AppContent() {
   };
 
   const logout = async () => {
-    await GoogleSignin.signOut().catch(() => undefined);
     await SecureStore.deleteItemAsync(sessionTokenKey);
     await clearOfflineData();
     setToken(null);
@@ -558,10 +586,14 @@ function AppContent() {
       <ProtectedScreen
         accessToken={token}
         families={families}
+        hasShareIntent={hasShareIntent}
         onFamiliesChanged={refreshFamilies}
         invitationToken={pendingInvitationToken}
         onInvitationHandled={() => setPendingInvitationToken(null)}
         onLogout={logout}
+        resetShareIntent={resetShareIntent}
+        shareIntent={shareIntent}
+        shareIntentError={shareIntentError}
         user={user}
       />
     );
@@ -579,6 +611,7 @@ function AppContent() {
             <Text style={styles.kicker}>Coparent Global</Text>
             <Text style={styles.title}>Entrar a tu espacio familiar</Text>
             <Text style={styles.subtitle}>Conecta la app mobile con el backend NestJS del MVP.</Text>
+            <Text style={styles.buildBadge}>Build {appBuildLabel} - Google por navegador</Text>
           </View>
 
           <View style={styles.segmented}>
@@ -645,7 +678,7 @@ function AppContent() {
               {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{mode === 'login' ? 'Ingresar' : 'Crear cuenta'}</Text>}
             </Pressable>
             <Pressable accessibilityRole="button" disabled={isLoading} onPress={submitGoogle} style={styles.googleButton}>
-              <Text style={styles.googleButtonText}>Continuar con Google</Text>
+              <Text style={styles.googleButtonText}>Continuar con Google en navegador</Text>
             </Pressable>
             {mode === 'login' ? (
               <>
@@ -659,7 +692,7 @@ function AppContent() {
             ) : null}
           </View>
 
-          <Text style={styles.apiHint}>API: {API_URL}</Text>
+          <Text style={styles.apiHint}>Version: {appBuildLabel} · API: {API_URL}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -713,17 +746,25 @@ function Field({
 function ProtectedScreen({
   accessToken,
   families,
+  hasShareIntent,
   onFamiliesChanged,
   invitationToken,
   onInvitationHandled,
+  resetShareIntent,
+  shareIntent,
+  shareIntentError,
   user,
   onLogout,
 }: {
   accessToken: string;
   families: Family[];
+  hasShareIntent: boolean;
   onFamiliesChanged: () => Promise<void>;
   invitationToken: string | null;
   onInvitationHandled: () => void;
+  resetShareIntent: () => void;
+  shareIntent: ShareIntent | null;
+  shareIntentError: string | null;
   user: AuthenticatedUser;
   onLogout: () => Promise<void>;
 }) {
@@ -769,6 +810,10 @@ function ProtectedScreen({
   const [whatsAppCode, setWhatsAppCode] = useState<WhatsAppLinkCode | null>(null);
   const [isWhatsAppLoading, setIsWhatsAppLoading] = useState(false);
   const [processingWhatsAppActionId, setProcessingWhatsAppActionId] = useState<string | null>(null);
+  const [isImportingShare, setIsImportingShare] = useState(false);
+  const [sharedReceiptFiles, setSharedReceiptFiles] = useState<Record<string, SharedReceiptFile>>({});
+  const [editingWhatsAppActionId, setEditingWhatsAppActionId] = useState<string | null>(null);
+  const [whatsAppDraftText, setWhatsAppDraftText] = useState('');
   const [reviewingInvitationToken, setReviewingInvitationToken] = useState<string | null>(null);
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const {
@@ -961,6 +1006,52 @@ function ProtectedScreen({
       })
       .catch(() => undefined);
   }, [accessToken, activeTab, primaryFamily?.id]);
+
+  useEffect(() => {
+    if (shareIntentError) setError(shareIntentError);
+  }, [shareIntentError]);
+
+  useEffect(() => {
+    if (!hasShareIntent || !shareIntent || !primaryFamily || !isOnline || isImportingShare) return;
+    const sharedFile = shareIntent.files?.find((file) => file.mimeType?.startsWith('image/'));
+    const text = [shareIntent.text, shareIntent.webUrl]
+      .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
+      .join('\n')
+      .trim();
+
+    setIsImportingShare(true);
+    createSharedWhatsAppAction(accessToken, {
+      familyId: primaryFamily.id,
+      text: text || undefined,
+      hasImage: Boolean(sharedFile),
+      fileName: sharedFile?.fileName,
+      mimeType: sharedFile?.mimeType,
+      fileSize: sharedFile?.size ?? undefined,
+      fileCount: sharedFile ? shareIntent.files?.length : undefined,
+    })
+      .then((action) => {
+        if (sharedFile) {
+          setSharedReceiptFiles((current) => ({ ...current, [action.id]: sharedFile }));
+        }
+        resetShareIntent();
+        setWhatsAppActions((current) => [action, ...current.filter((item) => item.id !== action.id)]);
+        setActiveTab('settings');
+        Alert.alert(t('shareDraftReady'), t('shareDraftReadyCopy'));
+      })
+      .catch((caught) => {
+        resetShareIntent();
+        setError(caught instanceof Error ? caught.message : t('shareDraftFailed'));
+      })
+      .finally(() => setIsImportingShare(false));
+  }, [
+    accessToken,
+    hasShareIntent,
+    isImportingShare,
+    isOnline,
+    primaryFamily?.id,
+    resetShareIntent,
+    shareIntent,
+  ]);
 
   const updateChildForm = (field: keyof ChildForm, value: string) => {
     setChildForm((current) => ({ ...current, [field]: value }));
@@ -1548,14 +1639,61 @@ function ProtectedScreen({
     }
   };
 
+  const startEditingWhatsAppAction = (action: WhatsAppPendingAction) => {
+    setWhatsAppDraftText(action.originalText ?? describeWhatsAppAction(action, t));
+    setEditingWhatsAppActionId(action.id);
+  };
+
+  const saveWhatsAppDraft = async () => {
+    if (!editingWhatsAppActionId) return;
+    setError(null);
+    setProcessingWhatsAppActionId(editingWhatsAppActionId);
+    try {
+      const updated = await updateWhatsAppAction(accessToken, editingWhatsAppActionId, whatsAppDraftText);
+      setWhatsAppActions((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditingWhatsAppActionId(null);
+      setWhatsAppDraftText('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('shareDraftFailed'));
+    } finally {
+      setProcessingWhatsAppActionId(null);
+    }
+  };
+
   const processWhatsAppAction = async (actionId: string, decision: 'confirm' | 'cancel') => {
     setError(null);
     setProcessingWhatsAppActionId(actionId);
     try {
       if (decision === 'confirm') {
-        await confirmWhatsAppAction(accessToken, actionId);
+        const confirmed = await confirmWhatsAppAction(accessToken, actionId);
+        const receiptFile = sharedReceiptFiles[actionId];
+        if (confirmed.type === 'EXPENSE' && confirmed.resultEntityId && receiptFile) {
+          if ((receiptFile.size ?? 0) > 2_000_000) {
+            Alert.alert(t('privateReceiptTooLarge'));
+          } else {
+            const dataBase64 = await FileSystem.readAsStringAsync(receiptFile.path, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            await uploadExpenseReceipt(accessToken, confirmed.resultEntityId, {
+              dataBase64,
+              mimeType: receiptFile.mimeType,
+              fileName: receiptFile.fileName,
+            });
+            Alert.alert(t('privateReceiptStored'));
+          }
+          setSharedReceiptFiles((current) => {
+            const next = { ...current };
+            delete next[actionId];
+            return next;
+          });
+        }
       } else {
         await cancelWhatsAppAction(accessToken, actionId);
+        setSharedReceiptFiles((current) => {
+          const next = { ...current };
+          delete next[actionId];
+          return next;
+        });
       }
       const [events, latestExpenses] = await Promise.all([
         getCalendarEvents(accessToken),
@@ -1569,6 +1707,20 @@ function ProtectedScreen({
       setError(caught instanceof Error ? caught.message : 'No pudimos procesar la accion.');
     } finally {
       setProcessingWhatsAppActionId(null);
+    }
+  };
+
+  const shareVerifiedArchive = async () => {
+    if (!primaryFamily) return;
+    try {
+      const archive = await exportFamilyArchive(accessToken, primaryFamily.id);
+      await Share.share({
+        title: t('exportFamilyArchive'),
+        message: JSON.stringify(archive, null, 2),
+      });
+      Alert.alert(t('exportReady'), archive.manifest.digest);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('exportFamilyArchiveCopy'));
     }
   };
 
@@ -1905,41 +2057,41 @@ function ProtectedScreen({
         {activeTab === 'expenses' ? (
           <>
             <View style={styles.header}>
-              <Text style={styles.kicker}>Economia familiar</Text>
-              <Text style={styles.title}>Gastos</Text>
-              <Text style={styles.subtitle}>Registra gastos compartidos o pagos hechos por una sola parte.</Text>
+              <Text style={styles.kicker}>{t('familyEconomy')}</Text>
+              <Text style={styles.title}>{t('expenses')}</Text>
+              <Text style={styles.subtitle}>{t('expenseSubtitle')}</Text>
             </View>
             {expenseReport ? (
               <View style={styles.card}>
-                <Text style={styles.cardLabel}>Analisis mensual - {expenseReport.month}</Text>
+                <Text style={styles.cardLabel}>{t('monthlyAnalysis')} - {expenseReport.month}</Text>
                 <Text style={styles.emptyTitle}>{formatCurrency(expenseReport.total, expenseReport.currency)}</Text>
                 <Text style={styles.emptyText}>
                   {expenseReport.changePercentage === null
-                    ? 'Sin gastos del mes anterior para comparar.'
-                    : `${expenseReport.changePercentage >= 0 ? '+' : ''}${expenseReport.changePercentage}% respecto del mes anterior.`}
+                    ? t('noPreviousMonthExpenses')
+                    : `${expenseReport.changePercentage >= 0 ? '+' : ''}${expenseReport.changePercentage}% ${t('comparedWithPreviousMonth')}`}
                 </Text>
                 <View style={styles.statGrid}>
                   <View style={styles.statTile}>
                     <Text style={styles.statValue}>{formatCurrency(expenseReport.sharedTotal, expenseReport.currency)}</Text>
-                    <Text style={styles.statLabel}>Compartidos</Text>
+                    <Text style={styles.statLabel}>{t('shared')}</Text>
                   </View>
                   <View style={styles.statTile}>
                     <Text style={styles.statValue}>{formatCurrency(expenseReport.individualTotal, expenseReport.currency)}</Text>
-                    <Text style={styles.statLabel}>Pagados por una parte</Text>
+                    <Text style={styles.statLabel}>{t('paidByOneParty')}</Text>
                   </View>
                   <View style={styles.statTile}>
                     <Text style={styles.statValue}>{formatCurrency(expenseReport.outstandingTotal, expenseReport.currency)}</Text>
-                    <Text style={styles.statLabel}>Pendiente de reembolso</Text>
+                    <Text style={styles.statLabel}>{t('reimbursementPending')}</Text>
                   </View>
                 </View>
-                <Text style={styles.label}>Por categoria</Text>
+                <Text style={styles.label}>{t('byCategory')}</Text>
                 {expenseReport.byCategory.map((category) => (
                   <View key={category.category} style={styles.reportRow}>
-                    <Text style={styles.childName}>{expenseCategoryLabel(category.category)}</Text>
+                    <Text style={styles.childName}>{expenseCategoryLabel(category.category, t)}</Text>
                     <Text style={styles.childDate}>{formatCurrency(category.total, expenseReport.currency)} - {category.percentage}%</Text>
                   </View>
                 ))}
-                <Text style={styles.label}>Pagado por persona</Text>
+                <Text style={styles.label}>{t('paidByPerson')}</Text>
                 {expenseReport.byPayer.map((payer) => (
                   <View key={payer.user.id} style={styles.reportRow}>
                     <Text style={styles.childName}>{payer.user.firstName} {payer.user.lastName}</Text>
@@ -1950,53 +2102,53 @@ function ProtectedScreen({
             ) : null}
             {expenseSummary ? (
               <View style={styles.card}>
-                <Text style={styles.cardLabel}>Resumen de saldos · {expenseSummary.currency}</Text>
-                <Text style={styles.emptyTitle}>{formatCurrency(expenseSummary.totalOutstanding, expenseSummary.currency)} pendientes</Text>
+                <Text style={styles.cardLabel}>{t('balanceSummary')} · {expenseSummary.currency}</Text>
+                <Text style={styles.emptyTitle}>{formatCurrency(expenseSummary.totalOutstanding, expenseSummary.currency)} {t('outstanding')}</Text>
                 {expenseSummary.balances.map((balance) => (
                   <View key={balance.user.id} style={styles.balanceRow}>
                     <Text style={styles.childName}>{balance.user.firstName}</Text>
                     <View style={styles.balanceValues}>
-                      <Text style={styles.childDate}>Debe {formatCurrency(balance.owes, expenseSummary.currency)}</Text>
-                      <Text style={balance.net >= 0 ? styles.paidText : styles.pendingText}>Neto {formatCurrency(balance.net, expenseSummary.currency)}</Text>
+                      <Text style={styles.childDate}>{t('owes')} {formatCurrency(balance.owes, expenseSummary.currency)}</Text>
+                      <Text style={balance.net >= 0 ? styles.paidText : styles.pendingText}>{t('net')} {formatCurrency(balance.net, expenseSummary.currency)}</Text>
                     </View>
                   </View>
                 ))}
               </View>
             ) : null}
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>Nuevo gasto</Text>
-              <Field label="Descripcion" value={expenseForm.description} onChangeText={(value) => setExpenseForm((current) => ({ ...current, description: value }))} placeholder="Ej: Cuota escolar" />
-              <Field label={`Importe ${primaryFamily?.settings?.currency ?? 'ARS'}`} value={expenseForm.amount} onChangeText={(value) => setExpenseForm((current) => ({ ...current, amount: value }))} keyboardType="decimal-pad" placeholder="0,00" />
-              <Field label="Comprobante opcional" value={expenseForm.receiptReference} onChangeText={(value) => setExpenseForm((current) => ({ ...current, receiptReference: value }))} placeholder="Enlace o referencia del comprobante" />
-              <Text style={styles.label}>Categoria</Text>
+              <Text style={styles.cardLabel}>{t('newExpense')}</Text>
+              <Field label={t('description')} value={expenseForm.description} onChangeText={(value) => setExpenseForm((current) => ({ ...current, description: value }))} placeholder={t('schoolFeeExample')} />
+              <Field label={`${t('amount')} ${primaryFamily?.settings?.currency ?? 'ARS'}`} value={expenseForm.amount} onChangeText={(value) => setExpenseForm((current) => ({ ...current, amount: value }))} keyboardType="decimal-pad" placeholder="0,00" />
+              <Field label={t('optionalReceipt')} value={expenseForm.receiptReference} onChangeText={(value) => setExpenseForm((current) => ({ ...current, receiptReference: value }))} placeholder={t('receiptReferencePlaceholder')} />
+              <Text style={styles.label}>{t('category')}</Text>
               <View style={styles.choiceRow}>
                 {expenseCategories.map((category) => (
-                  <ChoiceButton key={category.value} label={category.label} active={expenseForm.category === category.value} onPress={() => setExpenseForm((current) => ({ ...current, category: category.value }))} />
+                  <ChoiceButton key={category.value} label={t(category.key)} active={expenseForm.category === category.value} onPress={() => setExpenseForm((current) => ({ ...current, category: category.value }))} />
                 ))}
               </View>
-              <Text style={styles.label}>Quien pago</Text>
+              <Text style={styles.label}>{t('whoPaid')}</Text>
               <View style={styles.choiceRow}>
                 {primaryFamily?.members.map((member) => (
                   <ChoiceButton key={member.id} label={member.user.firstName} active={expenseForm.paidById === member.user.id} onPress={() => setExpenseForm((current) => ({ ...current, paidById: member.user.id }))} />
                 ))}
               </View>
-              <Text style={styles.label}>Tipo de gasto</Text>
+              <Text style={styles.label}>{t('expenseType')}</Text>
               <View style={styles.choiceRow}>
                 <ChoiceButton
-                  label="Dividir entre partes"
+                  label={t('splitBetweenParties')}
                   active={expenseForm.splitMode === 'SHARED'}
                   onPress={() => setExpenseForm((current) => ({ ...current, splitMode: 'SHARED' }))}
                 />
                 <ChoiceButton
-                  label="Lo pago una sola parte"
+                  label={t('onePartyPaid')}
                   active={expenseForm.splitMode === 'SINGLE_PAYER'}
                   onPress={() => setExpenseForm((current) => ({ ...current, splitMode: 'SINGLE_PAYER' }))}
                 />
               </View>
               <Text style={styles.emptyText}>
                 {expenseForm.splitMode === 'SHARED'
-                  ? 'Se reparte el importe entre los integrantes y queda pendiente el reembolso.'
-                  : 'Queda registrado como pago de una sola parte, sin generar deuda para la otra.'}
+                  ? t('sharedExpenseCopy')
+                  : t('singleExpenseCopy')}
               </Text>
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Pressable disabled={isCreatingExpense} onPress={submitExpense} style={[styles.primaryButton, isCreatingExpense ? styles.disabled : undefined]}>
@@ -2004,20 +2156,20 @@ function ProtectedScreen({
                   <ActivityIndicator color="#ffffff" />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    {expenseForm.splitMode === 'SHARED' ? 'Registrar y dividir' : 'Registrar pago'}
+                    {expenseForm.splitMode === 'SHARED' ? t('registerAndSplit') : t('registerPayment')}
                   </Text>
                 )}
               </Pressable>
             </View>
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>Historial</Text>
+              <Text style={styles.cardLabel}>{t('history')}</Text>
               {expenses.length ? expenses.map((expense) => (
                 <View key={expense.id} style={styles.expenseItem}>
                   <View style={styles.expenseHeading}>
                     <View style={styles.expenseDescription}>
                       <Text style={styles.childName}>{expense.description}</Text>
-                      {expense.storageKey ? <Text style={styles.receiptText}>Comprobante: {expense.storageKey}</Text> : null}
-                      <Text style={styles.childDate}>Pago por {expense.payer.firstName} · {formatDate(expense.createdAt)}</Text>
+                      {expense.storageKey ? <Text style={styles.receiptText}>{t('receipt')}: {expense.storageProvider === 'DATABASE_PRIVATE' ? t('privateReceiptStored') : expense.storageKey}</Text> : null}
+                      <Text style={styles.childDate}>{t('paidBy')} {expense.payer.firstName} · {formatDate(expense.createdAt)}</Text>
                     </View>
                     <Text style={styles.amountText}>{formatCurrency(Number(expense.amount), primaryFamily?.settings?.currency ?? 'ARS')}</Text>
                   </View>
@@ -2025,23 +2177,23 @@ function ProtectedScreen({
                     <View key={allocation.id} style={styles.allocationRow}>
                       <Text style={styles.allocationText}>{allocation.user.firstName}: {formatCurrency(Number(allocation.amountDue), primaryFamily?.settings?.currency ?? 'ARS')}</Text>
                       {allocation.status === 'PAID' ? (
-                        <Text style={styles.paidText}>Pagado</Text>
+                        <Text style={styles.paidText}>{t('paid')}</Text>
                       ) : allocation.userId === user.id ? (
                         <View style={styles.actionRow}>
                           <Pressable onPress={() => payMyAllocation(allocation.id)} style={styles.smallButton}>
-                            <Text style={styles.smallButtonText}>Pagar</Text>
+                            <Text style={styles.smallButtonText}>{t('pay')}</Text>
                           </Pressable>
                           <Pressable onPress={() => updateMyAllocation(allocation.id, 'OBSERVED')} style={styles.dangerButton}>
-                            <Text style={styles.dangerButtonText}>Observar</Text>
+                            <Text style={styles.dangerButtonText}>{t('observe')}</Text>
                           </Pressable>
                         </View>
                       ) : (
-                        <Text style={styles.pendingText}>Pendiente</Text>
+                        <Text style={styles.pendingText}>{t('pending')}</Text>
                       )}
                     </View>
                   ))}
                 </View>
-              )) : <Text style={styles.emptyText}>Todavia no hay gastos registrados.</Text>}
+              )) : <Text style={styles.emptyText}>{t('noExpenses')}</Text>}
             </View>
           </>
         ) : null}
@@ -2122,6 +2274,15 @@ function ProtectedScreen({
                 </Text>
                 <Pressable onPress={() => setActiveTab('plans')} style={styles.primaryButton}>
                   <Text style={styles.primaryButtonText}>{t('comparePlans')}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {primaryFamily && subscriptionState?.entitlements.verifiedAuditExports ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('exportFamilyArchive')}</Text>
+                <Text style={styles.emptyText}>{t('exportFamilyArchiveCopy')}</Text>
+                <Pressable onPress={shareVerifiedArchive} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>{t('exportFamilyArchive')}</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -2394,8 +2555,18 @@ function ProtectedScreen({
                       <View key={action.id} style={styles.whatsAppAction}>
                         <Text style={styles.roleText}>{whatsAppActionLabel(action.type, t)}</Text>
                         <Text style={styles.childName}>{describeWhatsAppAction(action, t)}</Text>
+                        <Text style={styles.childDate}>{whatsAppActionSourceLabel(action, t)}</Text>
+                        {whatsAppActionHasAttachment(action) ? (
+                          <>
+                            <Text style={styles.roleText}>{t('attachmentDetected')}</Text>
+                            <Text style={styles.childDate}>{t('attachmentNotStored')}</Text>
+                          </>
+                        ) : null}
                         <Text style={styles.childDate}>{formatDateTime(action.createdAt)}</Text>
                         <View style={styles.actionRow}>
+                          <Pressable disabled={processingWhatsAppActionId === action.id} onPress={() => startEditingWhatsAppAction(action)} style={styles.secondarySmallButton}>
+                            <Text style={styles.secondarySmallButtonText}>{t('editDraft')}</Text>
+                          </Pressable>
                           <Pressable disabled={processingWhatsAppActionId === action.id} onPress={() => processWhatsAppAction(action.id, 'confirm')} style={styles.smallButton}>
                             <Text style={styles.smallButtonText}>{t('confirm')}</Text>
                           </Pressable>
@@ -2423,6 +2594,36 @@ function ProtectedScreen({
           </>
         ) : null}
       </ScrollView>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={editingWhatsAppActionId !== null}
+        onRequestClose={() => setEditingWhatsAppActionId(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.selectSheet}>
+            <Text style={styles.emptyTitle}>{t('editPendingDraft')}</Text>
+            <Text style={styles.label}>{t('draftText')}</Text>
+            <TextInput
+              multiline
+              onChangeText={setWhatsAppDraftText}
+              placeholderTextColor="#8390a4"
+              style={[styles.input, styles.draftInput]}
+              value={whatsAppDraftText}
+            />
+            <Pressable
+              disabled={processingWhatsAppActionId === editingWhatsAppActionId}
+              onPress={saveWhatsAppDraft}
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryButtonText}>{t('saveDraft')}</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditingWhatsAppActionId(null)} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{t('cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal
         animationType="fade"
         transparent
@@ -2590,8 +2791,12 @@ function calendarEventTypeLabel(type: CalendarEventType, language: SupportedLang
   return option ? (language === 'en' ? option.en : option.es) : type;
 }
 
-function expenseCategoryLabel(category: ExpenseCategory) {
-  return expenseCategories.find((item) => item.value === category)?.label ?? category;
+function expenseCategoryLabel(
+  category: ExpenseCategory,
+  t: (key: Parameters<typeof translate>[1]) => string,
+) {
+  const item = expenseCategories.find((candidate) => candidate.value === category);
+  return item ? t(item.key) : category;
 }
 
 function whatsAppActionLabel(type: WhatsAppPendingAction['type'], t: (key: Parameters<typeof translate>[1]) => string) {
@@ -2608,6 +2813,17 @@ function describeWhatsAppAction(action: WhatsAppPendingAction, t: (key: Paramete
     return `${formatDateTime(String(action.payload.startDate))} - ${formatDateTime(String(action.payload.endDate))}`;
   }
   return String(action.payload.content ?? action.originalText ?? t('whatsappContentFallback'));
+}
+
+function whatsAppActionSourceLabel(
+  action: WhatsAppPendingAction,
+  t: (key: Parameters<typeof translate>[1]) => string,
+) {
+  return action.payload.source === 'DEVICE_SHARE' ? t('sharedFromDevice') : t('sharedFromWhatsApp');
+}
+
+function whatsAppActionHasAttachment(action: WhatsAppPendingAction) {
+  return Boolean(action.payload.attachment || action.mediaId);
 }
 
 function messageCategoryLabel(
@@ -2691,8 +2907,20 @@ function daysUntil(value: string) {
 
 function extractInvitationToken(url: string | null) {
   if (!url || !url.startsWith('coparentglobal://invite')) return null;
-  const match = url.match(/[?&]token=([^&]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  return extractUrlParam(url, 'token');
+}
+
+function extractGoogleAuthResult(url: string | null) {
+  if (!url || !url.startsWith('coparentglobal://auth/google')) return null;
+  return {
+    accessToken: extractUrlParam(url, 'accessToken'),
+    error: extractUrlParam(url, 'error'),
+  };
+}
+
+function extractUrlParam(url: string, name: string) {
+  const match = url.match(new RegExp(`[?&]${name}=([^&]+)`));
+  return match ? decodeURIComponent(match[1].replace(/\+/g, ' ')) : null;
 }
 
 const styles = StyleSheet.create({
@@ -2749,6 +2977,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
   },
+  buildBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e6f3f1',
+    borderColor: '#b7ddd8',
+    borderRadius: 8,
+    borderWidth: 1,
+    color: '#0b5f59',
+    fontSize: 12,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   segmented: {
     backgroundColor: '#e8edf4',
     borderRadius: 8,
@@ -2795,6 +3035,11 @@ const styles = StyleSheet.create({
     color: '#172033',
     minHeight: 50,
     paddingHorizontal: 14,
+  },
+  draftInput: {
+    minHeight: 140,
+    paddingTop: 14,
+    textAlignVertical: 'top',
   },
   dateSelectRow: {
     flexDirection: 'row',
@@ -3166,8 +3411,21 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
+  },
+  secondarySmallButton: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#d8dee8',
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  secondarySmallButtonText: {
+    color: '#344256',
+    fontWeight: '800',
   },
   smallButton: {
     backgroundColor: '#e6f3f1',

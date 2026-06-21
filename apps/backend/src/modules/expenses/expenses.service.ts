@@ -3,9 +3,9 @@ import { ExpenseStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { CreateExpenseDto, ExpenseSplitMode } from './expenses.dto';
-import { AttachExpenseReceiptDto } from './expenses.dto';
+import { AttachExpenseReceiptDto, CreateExpenseDto, ExpenseSplitMode, UploadExpenseReceiptDto } from './expenses.dto';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import * as crypto from 'crypto';
 
 const expenseInclude = {
   payer: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -176,6 +176,82 @@ export class ExpensesService {
     return updated;
   }
 
+  async uploadReceiptFile(expenseId: string, dto: UploadExpenseReceiptDto, userId: string) {
+    const expense = await this.findExpenseForMember(expenseId, userId);
+    if (expense.paidById !== userId) {
+      throw new ForbiddenException('Solo quien registro el pago puede adjuntar el comprobante.');
+    }
+    await this.subscriptions?.assertEntitlement(expense.familyId, userId, 'receiptManagement');
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(dto.dataBase64)) {
+      throw new BadRequestException('El comprobante no tiene un formato base64 valido.');
+    }
+    const content = Buffer.from(dto.dataBase64, 'base64');
+    if (!content.length || content.length > 2_000_000) {
+      throw new BadRequestException('El comprobante debe pesar entre 1 byte y 2 MB.');
+    }
+    const sha256 = crypto.createHash('sha256').update(content).digest('hex');
+    const receipt = await this.prisma.expenseReceipt.upsert({
+      where: { expenseId },
+      update: {
+        uploadedById: userId,
+        fileName: dto.fileName,
+        mimeType: dto.mimeType,
+        fileSize: content.length,
+        sha256,
+        content,
+      },
+      create: {
+        expenseId,
+        uploadedById: userId,
+        fileName: dto.fileName,
+        mimeType: dto.mimeType,
+        fileSize: content.length,
+        sha256,
+        content,
+      },
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        fileSize: true,
+        sha256: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    await this.prisma.expense.update({
+      where: { id: expenseId },
+      data: {
+        storageProvider: 'DATABASE_PRIVATE',
+        storageKey: receipt.id,
+        mimeType: receipt.mimeType,
+        fileSize: receipt.fileSize,
+      },
+    });
+    await this.audit.log({
+      userId,
+      familyId: expense.familyId,
+      action: 'UPLOAD_PRIVATE_EXPENSE_RECEIPT',
+      entity: 'ExpenseReceipt',
+      entityId: receipt.id,
+      metadata: { expenseId, sha256, fileSize: receipt.fileSize, mimeType: receipt.mimeType },
+    });
+    return receipt;
+  }
+
+  async getReceiptFile(expenseId: string, userId: string) {
+    await this.findExpenseForMember(expenseId, userId);
+    const receipt = await this.prisma.expenseReceipt.findUnique({ where: { expenseId } });
+    if (!receipt) throw new NotFoundException('Este gasto no tiene un comprobante privado.');
+    return {
+      fileName: receipt.fileName,
+      mimeType: receipt.mimeType,
+      fileSize: receipt.fileSize,
+      sha256: receipt.sha256,
+      dataBase64: Buffer.from(receipt.content).toString('base64'),
+    };
+  }
+
   async summary(familyId: string, userId: string) {
     const family = await this.prisma.family.findFirst({
       where: { id: familyId, members: { some: { userId } } },
@@ -292,5 +368,17 @@ export class ExpensesService {
         .map((payer) => ({ ...payer, total: Number(payer.total.toFixed(2)) }))
         .sort((a, b) => b.total - a.total),
     };
+  }
+
+  private async findExpenseForMember(expenseId: string, userId: string) {
+    const expense = await this.prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: { family: { include: { members: true } } },
+    });
+    if (!expense) throw new NotFoundException('No encontramos el gasto.');
+    if (!expense.family.members.some((member) => member.userId === userId)) {
+      throw new ForbiddenException('No integras esta familia.');
+    }
+    return expense;
   }
 }

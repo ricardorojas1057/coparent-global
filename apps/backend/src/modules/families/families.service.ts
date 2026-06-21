@@ -1,10 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { FamilyInvitationStatus, FamilyRole } from '@prisma/client';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { FamilyInvitationGuestResponse, FamilyInvitationStatus, FamilyRole } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AddFamilyMemberDto, CreateFamilyDto, CreateFamilyInvitationDto, UpdateFamilySettingsDto } from './families.dto';
 import { MailService } from '../../common/mail/mail.service';
 import * as crypto from 'crypto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 const publicSubscriptionSelect = {
   id: true,
@@ -28,6 +29,7 @@ export class FamiliesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
   ) {}
 
   findMine(userId: string) {
@@ -127,6 +129,8 @@ export class FamiliesService {
         expiresAt: true,
         acceptedAt: true,
         revokedAt: true,
+        guestResponse: true,
+        guestRespondedAt: true,
         createdAt: true,
         invitedBy: { select: { firstName: true, lastName: true } },
         acceptedBy: { select: { firstName: true, lastName: true, email: true } },
@@ -192,7 +196,28 @@ export class FamiliesService {
       inviter: invitation.invitedBy,
       role: invitation.role,
       emailHint: invitation.email ? this.maskEmail(invitation.email) : null,
+      guestResponse: invitation.guestResponse,
+      guestRespondedAt: invitation.guestRespondedAt,
       expiresAt: invitation.expiresAt,
+    };
+  }
+
+  async respondToInvitation(token: string, response: FamilyInvitationGuestResponse) {
+    const invitation = await this.findInvitationByToken(token);
+    if (invitation.status !== FamilyInvitationStatus.PENDING || invitation.expiresAt <= new Date()) {
+      throw new BadRequestException('La invitacion no esta disponible.');
+    }
+    const updated = await this.prisma.familyInvitation.update({
+      where: { id: invitation.id },
+      data: { guestResponse: response, guestRespondedAt: new Date() },
+      select: { guestResponse: true, guestRespondedAt: true },
+    });
+    return {
+      ...updated,
+      message:
+        response === FamilyInvitationGuestResponse.INTERESTED
+          ? 'Tu interes quedo registrado. Para acceder a la familia debes iniciar sesion o crear una cuenta.'
+          : 'Tu respuesta quedo registrada. No se creo ninguna cuenta ni acceso familiar.',
     };
   }
 
@@ -281,6 +306,75 @@ export class FamiliesService {
       metadata: { ...dto },
     });
     return settings;
+  }
+
+  async exportArchive(familyId: string, userId: string) {
+    await this.subscriptions?.assertEntitlement(familyId, userId, 'verifiedAuditExports');
+    const family = await this.prisma.family.findFirst({
+      where: { id: familyId, members: { some: { userId } } },
+      include: {
+        tenant: { select: { name: true, type: true } },
+        settings: true,
+        members: {
+          include: {
+            user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        children: {
+          include: {
+            calendarEvents: {
+              include: {
+                currentParent: { select: { id: true, firstName: true, lastName: true } },
+                createdBy: { select: { id: true, firstName: true, lastName: true } },
+                changeRequests: { orderBy: { createdAt: 'asc' } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        expenses: {
+          include: {
+            payer: { select: { id: true, firstName: true, lastName: true } },
+            allocations: { orderBy: { updatedAt: 'asc' } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        chatMessages: {
+          include: {
+            sender: { select: { id: true, firstName: true, lastName: true } },
+            reads: { orderBy: { viewedAt: 'asc' } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        auditLogs: { orderBy: [{ timestamp: 'asc' }, { id: 'asc' }] },
+      },
+    });
+    if (!family) throw new ForbiddenException('No integras esta familia.');
+
+    const generatedAt = new Date().toISOString();
+    const data = { version: 1, generatedAt, family };
+    const digest = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+    await this.audit.log({
+      userId,
+      familyId,
+      action: 'EXPORT_FAMILY_ARCHIVE',
+      entity: 'Family',
+      entityId: familyId,
+      metadata: { algorithm: 'SHA-256', digest },
+    });
+    return {
+      manifest: {
+        version: 1,
+        generatedAt,
+        algorithm: 'SHA-256',
+        digest,
+        notice:
+          'El hash permite comprobar que este archivo no fue modificado despues de su generacion. No certifica validez legal universal.',
+      },
+      data,
+    };
   }
 
   private async assertMembership(familyId: string, userId: string) {

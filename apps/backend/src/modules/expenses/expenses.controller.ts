@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AttachExpenseReceiptDto, CreateExpenseDto, UpdateExpenseAllocationStatusDto } from './expenses.dto';
+import { AttachExpenseReceiptDto, CreateExpenseDto, UpdateExpenseAllocationStatusDto, UploadExpenseReceiptDto } from './expenses.dto';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -55,5 +55,19 @@ export class ExpensesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.expenses.attachReceipt(expenseId, dto, user.id);
+  }
+
+  @Post(':id/receipt-file')
+  uploadReceiptFile(
+    @Param('id') expenseId: string,
+    @Body() dto: UploadExpenseReceiptDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.expenses.uploadReceiptFile(expenseId, dto, user.id);
+  }
+
+  @Get(':id/receipt-file')
+  getReceiptFile(@Param('id') expenseId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.expenses.getReceiptFile(expenseId, user.id);
   }
 }
