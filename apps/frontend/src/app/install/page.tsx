@@ -9,8 +9,14 @@ export const metadata: Metadata = {
     title: "Usar o instalar Coparent Global",
     description: "Accedé a Coparent Global desde el navegador, Google Play o como app web instalada.",
     url: "/install",
+    siteName: "Coparent Global",
+    locale: "es_AR",
+    type: "website",
+    images: ["/icons/icon-512.png"],
   },
   twitter: {
+    card: "summary_large_image",
+    images: ["/icons/icon-512.png"],
     title: "Usar o instalar Coparent Global",
     description: "Accedé a Coparent Global desde el navegador, Google Play o como app web instalada.",
   },
@@ -39,7 +45,7 @@ export default function InstallPage() {
 
         <div className="access-choice" aria-label="Opciones de acceso">
           <a className="primary-link" href="/app">
-            Usar desde el navegador
+            Ver formas de acceso
           </a>
           <div>
             <InstallPrompt />
@@ -51,7 +57,7 @@ export default function InstallPage() {
             <span>Opción 1: usar en navegador</span>
             <ol>
               <li>Abrir este link en Chrome o Safari.</li>
-              <li>Tocar Usar desde el navegador.</li>
+              <li>Tocar Ver formas de acceso.</li>
               <li>Guardar el link si querés volver más tarde.</li>
             </ol>
           </article>
