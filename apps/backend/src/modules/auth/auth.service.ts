@@ -36,13 +36,9 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    if (!this.mail.isConfigured()) {
-      throw new ServiceUnavailableException(
-        'El registro por email esta temporalmente pausado. Podes continuar con Google.',
-      );
-    }
     const exists = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
     if (exists) throw new ConflictException('El email ya esta registrado.');
+    const canVerifyEmail = this.mail.isConfigured();
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -51,8 +47,12 @@ export class AuthService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         phone: dto.phone,
+        emailVerifiedAt: canVerifyEmail ? undefined : new Date(),
       },
     });
+    if (!canVerifyEmail) {
+      return this.issueToken(user.id, user.email, user.role, user.authVersion);
+    }
     const delivered = await this.sendEmailVerification(user.id, user.email);
     return {
       requiresEmailVerification: true,
