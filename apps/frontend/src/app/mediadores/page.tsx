@@ -11,11 +11,18 @@ export const metadata: Metadata = {
     siteName: 'Coparent Global',
     locale: 'es_AR',
     type: 'website',
-    images: ['/icons/icon-512.png'],
+    images: [
+      {
+        url: '/og/coparent-global-og.png',
+        width: 1200,
+        height: 630,
+        alt: 'Coparent Global, app de coparentalidad para padres separados',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    images: ['/icons/icon-512.png'],
+    images: ['/og/coparent-global-og.png'],
     title: 'App para mediadores familiares | Coparent Global',
     description: 'Ordená acuerdos, calendarios, gastos y seguimiento familiar para procesos de mediación.',
   },

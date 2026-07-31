@@ -27,19 +27,19 @@ export const metadata: Metadata = {
     locale: 'es_AR',
     images: [
       {
-        url: '/icons/icon-512.png',
-        width: 512,
-        height: 512,
-        alt: 'Coparent Global',
+        url: '/og/coparent-global-og.png',
+        width: 1200,
+        height: 630,
+        alt: 'Coparent Global, app de coparentalidad para padres separados',
       },
     ],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'App de coparentalidad para padres separados | Coparent Global',
     description:
       'Calendario, mensajes, gastos y acuerdos familiares para familias separadas y profesionales.',
-    images: ['/icons/icon-512.png'],
+    images: ['/og/coparent-global-og.png'],
   },
   appleWebApp: {
     capable: true,
