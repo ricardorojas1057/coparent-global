@@ -1,9 +1,18 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'App para padres separados',
   description: 'Organizá calendario, mensajes, gastos y acuerdos familiares después de una separación, con privacidad y foco en los hijos/as.',
   alternates: { canonical: '/padres-separados' },
+  openGraph: {
+    title: 'App para padres separados | Coparent Global',
+    description: 'Organizá calendario, mensajes, gastos y acuerdos familiares después de una separación, con privacidad y foco en los hijos/as.',
+    url: '/padres-separados',
+  },
+  twitter: {
+    title: 'App para padres separados | Coparent Global',
+    description: 'Organizá calendario, mensajes, gastos y acuerdos familiares después de una separación, con privacidad y foco en los hijos/as.',
+  },
 };
 
 export default function SeoLandingPage() {

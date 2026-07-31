@@ -1,9 +1,18 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Coparent Global para abogados de familia',
+  title: 'App para abogados de familia',
   description: 'Herramienta para abogados de familia que necesitan organizar cronologías, gastos, mensajes y reportes familiares verificables.',
   alternates: { canonical: '/abogados' },
+  openGraph: {
+    title: 'App para abogados de familia | Coparent Global',
+    description: 'Cronologías, gastos, mensajes y reportes familiares verificables para abogados de familia.',
+    url: '/abogados',
+  },
+  twitter: {
+    title: 'App para abogados de familia | Coparent Global',
+    description: 'Cronologías, gastos, mensajes y reportes familiares verificables para abogados de familia.',
+  },
 };
 
 export default function SeoLandingPage() {

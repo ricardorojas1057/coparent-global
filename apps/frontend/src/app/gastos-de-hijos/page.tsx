@@ -1,9 +1,18 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Gastos compartidos de hijos con comprobantes',
   description: 'Registrá gastos de hijos, comprobantes, pagos por una parte, divisiones, reembolsos y saldos familiares.',
   alternates: { canonical: '/gastos-de-hijos' },
+  openGraph: {
+    title: 'Gastos compartidos de hijos con comprobantes | Coparent Global',
+    description: 'Registrá gastos de hijos, comprobantes, pagos por una parte, reembolsos y saldos familiares.',
+    url: '/gastos-de-hijos',
+  },
+  twitter: {
+    title: 'Gastos compartidos de hijos con comprobantes | Coparent Global',
+    description: 'Registrá gastos de hijos, comprobantes, pagos por una parte, reembolsos y saldos familiares.',
+  },
 };
 
 export default function SeoLandingPage() {

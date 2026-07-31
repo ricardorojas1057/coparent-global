@@ -43,7 +43,7 @@ export function InstallPrompt() {
   };
 
   if (installed) {
-    return <p className="install-status">Coparent Global ya esta instalada en este dispositivo.</p>;
+    return <p className="install-status">Coparent Global ya está instalada en este dispositivo.</p>;
   }
 
   return (
@@ -53,7 +53,7 @@ export function InstallPrompt() {
       </button>
       {!promptEvent ? (
         <p>
-          Si el boton no se activa, usa el menu del navegador y elegi <strong>Agregar a pantalla principal</strong>.
+          Si el botón no se activa, usá el menú del navegador y elegí <strong>Agregar a pantalla principal</strong>.
         </p>
       ) : null}
     </div>

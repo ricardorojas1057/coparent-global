@@ -1,9 +1,18 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Calendario de cuidado compartido',
   description: 'Organizá régimen de comunicación, entregas, retiros, responsables, actividades, salud, escuela y solicitudes de cambio.',
   alternates: { canonical: '/calendario-de-cuidado' },
+  openGraph: {
+    title: 'Calendario de cuidado compartido | Coparent Global',
+    description: 'Organizá régimen de comunicación, entregas, retiros, responsables y solicitudes de cambio.',
+    url: '/calendario-de-cuidado',
+  },
+  twitter: {
+    title: 'Calendario de cuidado compartido | Coparent Global',
+    description: 'Organizá régimen de comunicación, entregas, retiros, responsables y solicitudes de cambio.',
+  },
 };
 
 export default function SeoLandingPage() {

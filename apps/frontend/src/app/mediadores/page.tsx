@@ -1,9 +1,18 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Coparent Global para mediadores familiares',
+  title: 'App para mediadores familiares',
   description: 'Herramienta para mediadores familiares que buscan reducir conflicto, ordenar acuerdos y facilitar seguimiento entre progenitores.',
   alternates: { canonical: '/mediadores' },
+  openGraph: {
+    title: 'App para mediadores familiares | Coparent Global',
+    description: 'Ordená acuerdos, calendarios, gastos y seguimiento familiar para procesos de mediación.',
+    url: '/mediadores',
+  },
+  twitter: {
+    title: 'App para mediadores familiares | Coparent Global',
+    description: 'Ordená acuerdos, calendarios, gastos y seguimiento familiar para procesos de mediación.',
+  },
 };
 
 export default function SeoLandingPage() {
