@@ -121,6 +121,15 @@ type FamilyExportResponse = {
   html: string;
 };
 
+type FamilyInvitation = {
+  id: string;
+  email?: string | null;
+  role: string;
+  status: string;
+  expiresAt: string;
+  shareUrl?: string;
+};
+
 type FormState = {
   firstName: string;
   lastName: string;
@@ -160,6 +169,10 @@ type ExpenseFormState = {
   amount: string;
   splitMode: 'SHARED' | 'SINGLE_PAYER';
   receiptReference: string;
+};
+
+type InvitationFormState = {
+  email: string;
 };
 
 type CalendarEventType = 'CARE' | 'SCHOOL' | 'HEALTH' | 'ACTIVITY' | 'PICKUP_DROPOFF' | 'OTHER';
@@ -288,6 +301,7 @@ export function AppClient() {
   const [eventForm, setEventForm] = useState<EventFormState>(initialEventForm());
   const [messageForm, setMessageForm] = useState<MessageFormState>({ category: 'LOGISTICS', content: '' });
   const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(initialExpenseForm());
+  const [invitationForm, setInvitationForm] = useState<InvitationFormState>({ email: '' });
   const [selectedFamilyId, setSelectedFamilyId] = useState('');
   const [token, setToken] = useState('');
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -296,6 +310,8 @@ export function AppClient() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
+  const [invitations, setInvitations] = useState<FamilyInvitation[]>([]);
+  const [latestInvitationUrl, setLatestInvitationUrl] = useState('');
   const [toneReview, setToneReview] = useState<CommunicationReview | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -305,6 +321,7 @@ export function AppClient() {
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isSavingMessage, setIsSavingMessage] = useState(false);
   const [isSavingExpense, setIsSavingExpense] = useState(false);
+  const [isCreatingInvitation, setIsCreatingInvitation] = useState(false);
   const [isReviewingTone, setIsReviewingTone] = useState(false);
 
   const apiHost = useMemo(() => publicApiUrl.replace(/^https?:\/\//, ''), []);
@@ -372,10 +389,12 @@ export function AppClient() {
         authRequest<Expense[]>('/expenses', accessToken),
         authRequest<ExpenseSummary>(`/expenses/summary?familyId=${encodeURIComponent(familyId)}`, accessToken),
       ]);
+      const invitationsResponse = await authRequest<FamilyInvitation[]>(`/families/${familyId}/invitations`, accessToken).catch(() => []);
       setCalendarEvents(eventsResponse);
       setMessages(messagesResponse);
       setExpenses(expensesResponse);
       setExpenseSummary(summaryResponse);
+      setInvitations(invitationsResponse);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No pudimos cargar los datos familiares.');
     }
@@ -620,6 +639,40 @@ export function AppClient() {
     }
   }
 
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !selectedFamily) return;
+    setError('');
+    setMessage('');
+    setLatestInvitationUrl('');
+    setIsCreatingInvitation(true);
+
+    try {
+      const invitation = await authRequest<FamilyInvitation>(`/families/${selectedFamily.id}/invitations`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: invitationForm.email.trim() || undefined,
+          role: 'SECONDARY_PARENT',
+        }),
+      });
+      setInvitationForm({ email: '' });
+      setLatestInvitationUrl(invitation.shareUrl ?? '');
+      await loadFamilyWorkspace(token, selectedFamily.id);
+      setMessage('Invitación creada. Copiá el mensaje y mandalo por WhatsApp o email.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No pudimos crear la invitación.');
+    } finally {
+      setIsCreatingInvitation(false);
+    }
+  }
+
+  async function copyInvitationMessage() {
+    if (!latestInvitationUrl || !selectedFamily) return;
+    const text = `Hola, te invito a compartir nuestro espacio familiar en Coparent Global.\n\nCoparent Global sirve para organizar calendario, mensajes, gastos y comprobantes de los hijos/as en un lugar privado y claro.\n\nEntrá desde este link para aceptar la invitación:\n${latestInvitationUrl}\n\nTambién podés instalarla en la pantalla principal del celular desde:\nhttps://coparent-global.vercel.app/install`;
+    await navigator.clipboard.writeText(text);
+    setMessage('Mensaje copiado. Ahora pegalo en WhatsApp.');
+  }
+
   function changeFamily(familyId: string) {
     const family = families.find((item) => item.id === familyId);
     setSelectedFamilyId(familyId);
@@ -638,6 +691,8 @@ export function AppClient() {
     setMessages([]);
     setExpenses([]);
     setExpenseSummary(null);
+    setInvitations([]);
+    setLatestInvitationUrl('');
     setMessage('');
     setError('');
   }
@@ -998,6 +1053,12 @@ export function AppClient() {
         <article className="resource-card web-action-card">
           <span>Gastos</span>
           <h2>Registrar gasto</h2>
+          {selectedFamily.members.length < 2 ? (
+            <div className="install-note">
+              Para dividir gastos con la otra parte, primero invitá al otro progenitor desde Perfil. Cuando acepte, va a aparecer en “Pagó” y el reparto se calculará entre ambos.
+              <button className="secondary-button" type="button" onClick={() => setActiveTab('profile')}>Invitar desde Perfil</button>
+            </div>
+          ) : null}
           <form className="action-form web-inline-form" onSubmit={createExpense}>
             <label>
               Descripción
@@ -1092,6 +1153,40 @@ export function AppClient() {
             <a href="/account-deletion">Eliminar cuenta</a>
             {selectedFamily ? <button className="text-button" type="button" onClick={downloadFamilyExport}>Descargar exportación básica familiar</button> : null}
           </div>
+        </article>
+        <article className="resource-card web-action-card">
+          <span>Invitar al otro progenitor</span>
+          <p>Para dividir gastos entre las partes, primero el otro progenitor tiene que aceptar una invitación y entrar a esta familia.</p>
+          <form className="action-form web-inline-form" onSubmit={createInvitation}>
+            <label>
+              Email del otro progenitor opcional
+              <input
+                inputMode="email"
+                placeholder="Si lo completás, el link queda limitado a ese email"
+                type="email"
+                value={invitationForm.email}
+                onChange={(event) => setInvitationForm({ email: event.target.value })}
+              />
+            </label>
+            <button disabled={isCreatingInvitation} type="submit">{isCreatingInvitation ? 'Creando...' : 'Crear invitación'}</button>
+          </form>
+          {latestInvitationUrl ? (
+            <div className="install-note">
+              <p>Link de invitación:</p>
+              <a href={latestInvitationUrl}>{latestInvitationUrl}</a>
+              <button className="secondary-button" type="button" onClick={copyInvitationMessage}>Copiar mensaje para WhatsApp</button>
+            </div>
+          ) : null}
+          {invitations.length ? (
+            <div className="stack-list">
+              {invitations.slice(0, 4).map((invitation) => (
+                <div className="list-item" key={invitation.id}>
+                  <strong>{invitation.email || 'Invitación sin email limitado'}</strong>
+                  <small>{invitation.status} · vence {formatDate(invitation.expiresAt)}</small>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </article>
         <article className="install-note web-full-width">
           Para usar Coparent Global como app en el celular, tocá <a href="/install">Instalar en pantalla principal</a>. No necesitás descargarla desde Google Play.
