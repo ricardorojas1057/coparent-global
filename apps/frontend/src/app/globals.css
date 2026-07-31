@@ -217,14 +217,24 @@ h2 {
   gap: 7px;
 }
 
-.action-form input {
+.action-form input,
+.action-form select,
+.action-form textarea {
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--foreground);
   font: inherit;
-  min-height: 48px;
   padding: 10px 12px;
+}
+
+.action-form input,
+.action-form select {
+  min-height: 48px;
+}
+
+.action-form textarea {
+  resize: vertical;
 }
 
 .action-form button,
@@ -418,6 +428,22 @@ h2 {
 
 .web-app-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.web-action-card {
+  margin-top: 24px;
+}
+
+.web-inline-form {
+  margin-top: 18px;
+  max-width: none;
+}
+
+.compact-list {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 12px 0 0;
+  padding-left: 18px;
 }
 
 .secondary-button {

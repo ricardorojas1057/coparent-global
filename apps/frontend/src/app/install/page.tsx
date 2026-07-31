@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { InstallPrompt } from "./install-prompt";
 
 export const metadata: Metadata = {
-  title: "Usar o instalar Coparent Global",
-  description: "Usá Coparent Global desde el navegador o instalala como app web en tu celular.",
+  title: "Instalar Coparent Global como app web",
+  description: "Usá Coparent Global desde el navegador o instalala en la pantalla principal de tu celular.",
   alternates: { canonical: "/install" },
   openGraph: {
-    title: "Usar o instalar Coparent Global",
-    description: "Accedé a Coparent Global desde el navegador, Google Play o como app web instalada.",
+    title: "Instalar Coparent Global como app web",
+    description: "Accedé a Coparent Global desde el navegador o instalala en la pantalla principal.",
     url: "/install",
     siteName: "Coparent Global",
     locale: "es_AR",
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     images: ["/og/coparent-global-og.png"],
-    title: "Usar o instalar Coparent Global",
-    description: "Accedé a Coparent Global desde el navegador, Google Play o como app web instalada.",
+    title: "Instalar Coparent Global como app web",
+    description: "Accedé a Coparent Global desde el navegador o instalala en la pantalla principal.",
   },
 };
 
@@ -44,15 +44,15 @@ export default function InstallPage() {
 
       <section className="install-page" aria-labelledby="install-title">
         <p className="eyebrow">Acceso desde celular</p>
-        <h1 id="install-title">Usá Coparent Global desde el navegador o instalala como app</h1>
+        <h1 id="install-title">Usá Coparent Global desde el navegador o instalala como app web</h1>
         <p className="lead">
-          Podés entrar desde Chrome o Safari sin descargar nada. Si querés acceso más rápido, agregala a la pantalla
+          Podés entrar desde Chrome, Edge o Safari sin descargar nada. Si querés acceso más rápido, agregala a la pantalla
           principal y se abre como una app instalada.
         </p>
 
         <div className="access-choice" aria-label="Opciones de acceso">
           <a className="primary-link" href="/app">
-            Ver formas de acceso
+            Entrar a la app web
           </a>
           <div>
             <InstallPrompt />
@@ -63,9 +63,9 @@ export default function InstallPage() {
           <article className="resource-card">
             <span>Opción 1: usar en navegador</span>
             <ol>
-              <li>Abrir este link en Chrome o Safari.</li>
-              <li>Tocar Ver formas de acceso.</li>
-              <li>Guardar el link si querés volver más tarde.</li>
+              <li>Abrí este link en Chrome, Edge o Safari.</li>
+              <li>Tocá Entrar a la app web.</li>
+              <li>Guardá el link si querés volver más tarde.</li>
             </ol>
           </article>
           <article className="resource-card">
@@ -73,14 +73,14 @@ export default function InstallPage() {
             <ol>
               <li>Android: Chrome, menú de tres puntos, Instalar app o Agregar a pantalla principal.</li>
               <li>iPhone: Safari, Compartir, Agregar a pantalla de inicio.</li>
-              <li>Abrir Coparent Global desde el ícono nuevo.</li>
+              <li>Abrí Coparent Global desde el ícono nuevo.</li>
             </ol>
           </article>
         </div>
 
         <div className="install-note">
-          <strong>Importante:</strong> esta opción web evita depender de Google Play para entrar desde el celular. La app
-          nativa de Google Play sigue siendo el canal recomendado para pruebas cerradas y funciones móviles avanzadas.
+          <strong>Importante:</strong> Coparent Global funciona primero como web. Google Play queda como canal opcional para
+          quienes prefieran instalar la app nativa cuando esté disponible.
         </div>
       </section>
     </main>

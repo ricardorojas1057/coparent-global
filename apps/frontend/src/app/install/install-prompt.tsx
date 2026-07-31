@@ -49,7 +49,7 @@ export function InstallPrompt() {
   return (
     <div className="install-prompt">
       <button className="primary-link" type="button" onClick={install} disabled={!promptEvent}>
-        Instalar app
+        Instalar en pantalla principal
       </button>
       {!promptEvent ? (
         <p>

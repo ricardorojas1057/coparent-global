@@ -3,7 +3,7 @@
   "name": "Coparent Global",
   "short_name": "Coparent",
   "description": "Organiza calendario, mensajes, gastos e invitaciones familiares desde una web instalable.",
-  "start_url": "/?source=pwa",
+  "start_url": "/app?source=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f6f8fa",
@@ -16,7 +16,7 @@
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    { "name": "Abrir Coparent Global", "short_name": "Abrir", "description": "Entrar al sitio instalable de Coparent Global", "url": "/?source=shortcut" },
+    { "name": "Abrir Coparent Global", "short_name": "Abrir", "description": "Entrar a Coparent Global", "url": "/app?source=shortcut" },
     { "name": "Aceptar invitacion", "short_name": "Invitacion", "description": "Abrir una invitacion familiar", "url": "/invite" }
   ]
 }

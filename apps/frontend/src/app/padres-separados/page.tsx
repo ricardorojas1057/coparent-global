@@ -58,7 +58,7 @@ export default function SeoLandingPage() {
       <section className='resource-section'>
         <div className='resource-grid'>
           <article className='resource-card'><span>Menos información dispersa</span><p>Centralizá lo que hoy suele quedar en WhatsApp, capturas, recibos, notas y calendarios separados.</p></article>
-          <article className='resource-card'><span>Invitaciones simples</span><p>Podés invitar al otro progenitor y compartir instrucciones claras para usar la app desde Google Play o desde navegador.</p></article>
+          <article className='resource-card'><span>Invitaciones simples</span><p>Podés invitar al otro progenitor y compartir instrucciones claras para usar Coparent Global desde el navegador o instalarla en pantalla principal.</p></article>
           <article className='resource-card'><span>Privacidad visible</span><p>La app está pensada para datos sensibles de familias e hijos/as, con eliminación de cuenta y límites claros sobre el uso de la información.</p></article>
           <article className='resource-card'><span>Uso responsable</span><p>La app ordena información sensible, pero no reemplaza acuerdos, resoluciones judiciales ni asesoramiento profesional.</p></article>
         </div>
