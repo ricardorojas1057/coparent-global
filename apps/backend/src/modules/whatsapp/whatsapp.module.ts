@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { CalendarModule } from '../calendar/calendar.module';
 import { ExpensesModule } from '../expenses/expenses.module';
+import { MessagesModule } from '../messages/messages.module';
 import { WhatsAppController } from './whatsapp.controller';
 import { WhatsAppService } from './whatsapp.service';
 
 @Module({
-  imports: [AuditModule, CalendarModule, ExpensesModule],
+  imports: [AuditModule, CalendarModule, ExpensesModule, MessagesModule],
   controllers: [WhatsAppController],
   providers: [WhatsAppService],
 })

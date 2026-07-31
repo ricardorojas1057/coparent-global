@@ -16,7 +16,8 @@ describe('ExpensesService create', () => {
       },
     };
     const audit = { log: jest.fn() };
-    const service = new ExpensesService(prisma as never, audit as never);
+    const notifications = { notifyFamily: jest.fn() };
+    const service = new ExpensesService(prisma as never, audit as never, notifications as never);
 
     await service.create(
       {
@@ -41,6 +42,12 @@ describe('ExpensesService create', () => {
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({
       metadata: expect.objectContaining({ splitMode: ExpenseSplitMode.SINGLE_PAYER }),
     }));
+    expect(notifications.notifyFamily).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Nuevo gasto familiar',
+      body: 'Hay una novedad en los gastos familiares.',
+      data: { type: 'expense', expenseId: 'expense-id' },
+    }));
+    expect(notifications.notifyFamily.mock.calls[0][0].body).not.toContain('Uniforme');
   });
 });
 

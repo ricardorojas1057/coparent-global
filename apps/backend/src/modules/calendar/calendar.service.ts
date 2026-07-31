@@ -70,7 +70,7 @@ export class CalendarService {
       familyId: child.familyId,
       actorId: userId,
       title: 'Nuevo evento familiar',
-      body: dto.title,
+      body: 'Hay una novedad en el calendario familiar.',
       data: { type: 'calendar-event', eventId: event.id },
     });
     return event;

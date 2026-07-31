@@ -76,6 +76,7 @@ import {
   createSharedWhatsAppAction,
   createWhatsAppLinkCode,
   executeQueuedMutation,
+  exportBasicFamilyHtml,
   exportFamilyArchive,
   getCurrentUser,
   getCalendarChangeRequests,
@@ -147,7 +148,7 @@ type BirthDateParts = {
   year: string;
 };
 
-type AppTab = 'home' | 'calendar' | 'messages' | 'expenses' | 'profile' | 'plans' | 'settings';
+type AppTab = 'home' | 'calendar' | 'messages' | 'expenses' | 'profile' | 'plans' | 'settings' | 'privacy' | 'exports';
 
 type SharedReceiptFile = {
   fileName: string;
@@ -243,7 +244,94 @@ const initialCalendarForm: CalendarForm = {
 };
 
 const sessionTokenKey = 'coparent.sessionToken';
-const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 35})`;
+const appBuildLabel = `${Constants.expoConfig?.version ?? '0.10.0'} (${Constants.expoConfig?.android?.versionCode ?? 36})`;
+const playTestingUrl = 'https://play.google.com/apps/testing/ar.coparent.app';
+
+const authCopy: Record<SupportedLanguage, {
+  title: string;
+  subtitle: string;
+  valuePillOne: string;
+  valuePillTwo: string;
+  valuePillThree: string;
+  trialBadge: string;
+  login: string;
+  register: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  optionalPhone: string;
+  createAccount: string;
+  continueGoogle: string;
+  forgotPassword: string;
+  resendVerification: string;
+  privacyNote: string;
+  startFamily: string;
+  receivedInvitation: string;
+  useAlone: string;
+  invitedNotice: string;
+  useAloneCopy: string;
+  firstStepTitle: string;
+  firstStepCopy: string;
+  testingHelp: string;
+}> = {
+  es: {
+    title: 'Organizá la coparentalidad sin sumar conflicto',
+    subtitle: 'Calendario, mensajes, gastos e invitaciones en un solo lugar, con foco en el bienestar de tus hijos.',
+    valuePillOne: 'Calendario claro',
+    valuePillTwo: 'Mensajes responsables',
+    valuePillThree: 'Gastos ordenados',
+    trialBadge: `Prueba cerrada · versión ${appBuildLabel}`,
+    login: 'Ingresar',
+    register: 'Registrarme',
+    firstName: 'Nombre',
+    lastName: 'Apellido',
+    email: 'Email',
+    password: 'Contraseña',
+    optionalPhone: 'Teléfono opcional',
+    createAccount: 'Crear cuenta',
+    continueGoogle: 'Continuar con Google',
+    forgotPassword: 'Olvidé mi contraseña',
+    resendVerification: 'Reenviar verificación de email',
+    privacyNote: 'Privacidad visible: podés cambiar idioma, analítica, IA y eliminación de cuenta desde Perfil.',
+    startFamily: 'Crear mi espacio familiar',
+    receivedInvitation: 'Ya recibí una invitación',
+    useAlone: 'Usar aunque la otra persona no participe',
+    invitedNotice: 'Si te llegó un link por WhatsApp, abrilo en este celular. Después registrate o ingresá para aceptar la invitación.',
+    useAloneCopy: 'Podés registrar eventos, gastos e intentos de comunicación aunque el otro progenitor todavía no use la app.',
+    firstStepTitle: 'Primer paso',
+    firstStepCopy: 'Creá tu cuenta, armá tu familia y luego compartí una invitación clara por WhatsApp.',
+    testingHelp: 'Si Google Play dice “app no disponible”, pedile a quien te invitó que agregue tu Gmail como tester.',
+  },
+  en: {
+    title: 'Organize co-parenting without adding conflict',
+    subtitle: 'Calendar, messages, expenses and invitations in one place, focused on your children’s wellbeing.',
+    valuePillOne: 'Clear calendar',
+    valuePillTwo: 'Responsible messages',
+    valuePillThree: 'Organized expenses',
+    trialBadge: `Closed test · version ${appBuildLabel}`,
+    login: 'Log in',
+    register: 'Create account',
+    firstName: 'First name',
+    lastName: 'Last name',
+    email: 'Email',
+    password: 'Password',
+    optionalPhone: 'Optional phone',
+    createAccount: 'Create account',
+    continueGoogle: 'Continue with Google',
+    forgotPassword: 'Forgot password',
+    resendVerification: 'Resend email verification',
+    privacyNote: 'Visible privacy: change language, analytics, AI and account deletion from Profile.',
+    startFamily: 'Create my family space',
+    receivedInvitation: 'I received an invitation',
+    useAlone: 'Use it even if the other parent does not join',
+    invitedNotice: 'If you received a WhatsApp link, open it on this phone. Then create an account or log in to accept the invitation.',
+    useAloneCopy: 'You can record events, expenses and communication attempts even if the other parent is not using the app yet.',
+    firstStepTitle: 'First step',
+    firstStepCopy: 'Create your account, set up your family, then share a clear WhatsApp invitation.',
+    testingHelp: 'If Google Play says the app is unavailable, ask the person who invited you to add your Gmail as a tester.',
+  },
+};
 
 const monthNames: Record<SupportedLanguage, string[]> = {
   es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
@@ -385,6 +473,8 @@ function AppContent({
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(null);
+  const [authLanguage, setAuthLanguage] = useState<SupportedLanguage>('es');
+  const authText = authCopy[authLanguage];
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -429,9 +519,9 @@ function AppContent({
     const captureDeepLink = (url: string | null) => {
       const googleAuth = extractGoogleAuthResult(url);
       if (googleAuth?.accessToken) {
-        setNotice('Sesion de Google confirmada. Preparando tu espacio familiar...');
+        setNotice(authLanguage === 'en' ? 'Google sign-in confirmed. Preparing your family space...' : 'Sesión de Google confirmada. Preparando tu espacio familiar...');
         completeAuth({ accessToken: googleAuth.accessToken }).catch((caught) => {
-          setError(caught instanceof Error ? caught.message : 'No pudimos completar el inicio con Google.');
+          setError(caught instanceof Error ? caught.message : authLanguage === 'en' ? 'We could not complete Google sign-in.' : 'No pudimos completar el inicio con Google.');
         });
         return;
       }
@@ -443,7 +533,7 @@ function AppContent({
       const invitationToken = extractInvitationToken(url);
       if (invitationToken) {
         setPendingInvitationToken(invitationToken);
-        setNotice('Invitacion detectada. Inicia sesion o registrate para revisarla.');
+        setNotice(authLanguage === 'en' ? 'Invitation detected. Log in or create an account to review it.' : 'Invitación detectada. Iniciá sesión o registrate para revisarla.');
       }
     };
     Linking.getInitialURL().then(captureDeepLink);
@@ -505,7 +595,7 @@ function AppContent({
     try {
       await startGoogleBrowserLogin();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos abrir Google en el navegador.');
+      setError(caught instanceof Error ? caught.message : authLanguage === 'en' ? 'We could not open Google in the browser.' : 'No pudimos abrir Google en el navegador.');
     } finally {
       setIsLoading(false);
     }
@@ -513,13 +603,13 @@ function AppContent({
 
   const startGoogleBrowserLogin = async () => {
     const startUrl = `${API_URL.replace(/\/$/, '')}/auth/google/mobile/start`;
-    setNotice('Abrimos Google en el navegador para completar el ingreso.');
+    setNotice(authLanguage === 'en' ? 'We opened Google in the browser to complete sign-in.' : 'Abrimos Google en el navegador para completar el ingreso.');
     await Linking.openURL(startUrl);
   };
 
   const forgotPassword = async () => {
     if (!form.email.trim()) {
-      setError('Ingresa tu email para recuperar el acceso.');
+      setError(authLanguage === 'en' ? 'Enter your email to recover access.' : 'Ingresá tu email para recuperar el acceso.');
       return;
     }
     setError(null);
@@ -528,7 +618,7 @@ function AppContent({
       const result = await requestPasswordReset(form.email.trim());
       setNotice(result.message);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos solicitar la recuperacion.');
+      setError(caught instanceof Error ? caught.message : authLanguage === 'en' ? 'We could not request password recovery.' : 'No pudimos solicitar la recuperación.');
     } finally {
       setIsLoading(false);
     }
@@ -536,7 +626,7 @@ function AppContent({
 
   const resendVerification = async () => {
     if (!form.email.trim()) {
-      setError('Ingresa tu email para reenviar la verificacion.');
+      setError(authLanguage === 'en' ? 'Enter your email to resend verification.' : 'Ingresá tu email para reenviar la verificación.');
       return;
     }
     setError(null);
@@ -545,10 +635,20 @@ function AppContent({
       const result = await requestEmailVerification(form.email.trim());
       setNotice(result.message);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos reenviar la verificacion.');
+      setError(caught instanceof Error ? caught.message : authLanguage === 'en' ? 'We could not resend verification.' : 'No pudimos reenviar la verificación.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const chooseInvitationFlow = () => {
+    setMode('register');
+    setNotice(authText.invitedNotice);
+  };
+
+  const chooseStandaloneFlow = () => {
+    setMode('register');
+    setNotice(authText.useAloneCopy);
   };
 
   const logout = async () => {
@@ -609,27 +709,62 @@ function AppContent({
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.kicker}>Coparent Global</Text>
-            <Text style={styles.title}>Entrar a tu espacio familiar</Text>
-            <Text style={styles.subtitle}>Conecta la app mobile con el backend NestJS del MVP.</Text>
-            <Text style={styles.buildBadge}>Build {appBuildLabel} - Google por navegador</Text>
+            <Text style={styles.title}>{authText.title}</Text>
+            <Text style={styles.subtitle}>{authText.subtitle}</Text>
+            <View style={styles.authValueGrid}>
+              <Text style={styles.authValuePill}>{authText.valuePillOne}</Text>
+              <Text style={styles.authValuePill}>{authText.valuePillTwo}</Text>
+              <Text style={styles.authValuePill}>{authText.valuePillThree}</Text>
+            </View>
+            <View style={styles.authTopRow}>
+              <Text style={styles.buildBadge}>{authText.trialBadge}</Text>
+              <View style={styles.languageToggle}>
+                <Pressable onPress={() => setAuthLanguage('es')} style={[styles.languageButton, authLanguage === 'es' ? styles.languageButtonActive : undefined]}>
+                  <Text style={[styles.languageButtonText, authLanguage === 'es' ? styles.languageButtonTextActive : undefined]}>ES</Text>
+                </Pressable>
+                <Pressable onPress={() => setAuthLanguage('en')} style={[styles.languageButton, authLanguage === 'en' ? styles.languageButtonActive : undefined]}>
+                  <Text style={[styles.languageButtonText, authLanguage === 'en' ? styles.languageButtonTextActive : undefined]}>EN</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.onboardingPanel}>
+            <Text style={styles.cardLabel}>{authText.firstStepTitle}</Text>
+            <Text style={styles.emptyText}>{authText.firstStepCopy}</Text>
+            <View style={styles.onboardingActionGrid}>
+              <Pressable onPress={() => setMode('register')} style={styles.onboardingPrimaryAction}>
+                <Text style={styles.onboardingPrimaryText}>{authText.startFamily}</Text>
+              </Pressable>
+              <Pressable onPress={chooseInvitationFlow} style={styles.onboardingSecondaryAction}>
+                <Text style={styles.onboardingSecondaryText}>{authText.receivedInvitation}</Text>
+              </Pressable>
+              <Pressable onPress={() => setMode('login')} style={styles.onboardingSecondaryAction}>
+                <Text style={styles.onboardingSecondaryText}>{authText.login}</Text>
+              </Pressable>
+            </View>
+            <Pressable onPress={chooseStandaloneFlow} style={styles.onboardingQuietAction}>
+              <Text style={styles.onboardingQuietText}>{authText.useAlone}</Text>
+            </Pressable>
+            <Text style={styles.apiHint}>{authText.testingHelp}</Text>
           </View>
 
           <View style={styles.segmented}>
-            <ModeButton label="Ingresar" isActive={mode === 'login'} onPress={() => setMode('login')} />
-            <ModeButton label="Registrarme" isActive={mode === 'register'} onPress={() => setMode('register')} />
+            <ModeButton label={authText.login} isActive={mode === 'login'} onPress={() => setMode('login')} />
+            <ModeButton label={authText.register} isActive={mode === 'register'} onPress={() => setMode('register')} />
           </View>
 
           <View style={styles.form}>
             {mode === 'register' ? (
               <View style={styles.row}>
                 <Field
-                  label="Nombre"
+                  label={authText.firstName}
                   value={form.firstName}
                   onChangeText={(value) => updateForm('firstName', value)}
                   autoCapitalize="words"
                 />
                 <Field
-                  label="Apellido"
+                  label={authText.lastName}
                   value={form.lastName}
                   onChangeText={(value) => updateForm('lastName', value)}
                   autoCapitalize="words"
@@ -638,7 +773,7 @@ function AppContent({
             ) : null}
 
             <Field
-              label="Email"
+              label={authText.email}
               value={form.email}
               onChangeText={(value) => updateForm('email', value)}
               keyboardType="email-address"
@@ -646,7 +781,7 @@ function AppContent({
               autoComplete="email"
             />
             <Field
-              label="Password"
+              label={authText.password}
               value={form.password}
               onChangeText={(value) => updateForm('password', value)}
               secureTextEntry
@@ -655,7 +790,7 @@ function AppContent({
 
             {mode === 'register' ? (
               <Field
-                label="Telefono opcional"
+                label={authText.optionalPhone}
                 value={form.phone}
                 onChangeText={(value) => updateForm('phone', value)}
                 keyboardType="phone-pad"
@@ -675,24 +810,24 @@ function AppContent({
                 isLoading ? styles.disabled : undefined,
               ]}
             >
-              {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{mode === 'login' ? 'Ingresar' : 'Crear cuenta'}</Text>}
+              {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{mode === 'login' ? authText.login : authText.createAccount}</Text>}
             </Pressable>
             <Pressable accessibilityRole="button" disabled={isLoading} onPress={submitGoogle} style={styles.googleButton}>
-              <Text style={styles.googleButtonText}>Continuar con Google en navegador</Text>
+              <Text style={styles.googleButtonText}>{authText.continueGoogle}</Text>
             </Pressable>
             {mode === 'login' ? (
               <>
                 <Pressable accessibilityRole="button" disabled={isLoading} onPress={forgotPassword} style={styles.linkButton}>
-                  <Text style={styles.linkButtonText}>Olvide mi contrasena</Text>
+                  <Text style={styles.linkButtonText}>{authText.forgotPassword}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" disabled={isLoading} onPress={resendVerification} style={styles.linkButton}>
-                  <Text style={styles.linkButtonText}>Reenviar verificacion de email</Text>
+                  <Text style={styles.linkButtonText}>{authText.resendVerification}</Text>
                 </Pressable>
               </>
             ) : null}
           </View>
 
-          <Text style={styles.apiHint}>Version: {appBuildLabel} · API: {API_URL}</Text>
+          <Text style={styles.apiHint}>{authText.privacyNote}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -863,19 +998,21 @@ function ProtectedScreen({
           return;
         }
         Alert.alert(
-          'Aceptar invitacion familiar',
-          `${invitation.inviter.firstName} ${invitation.inviter.lastName} te invita a ${invitation.familyName}.`,
+          language === 'en' ? 'Accept family invitation' : 'Aceptar invitación familiar',
+          language === 'en'
+            ? `${invitation.inviter.firstName} ${invitation.inviter.lastName} invited you to ${invitation.familyName}.`
+            : `${invitation.inviter.firstName} ${invitation.inviter.lastName} te invita a ${invitation.familyName}.`,
           [
-            { text: 'Ahora no', style: 'cancel', onPress: onInvitationHandled },
+            { text: language === 'en' ? 'Not now' : 'Ahora no', style: 'cancel', onPress: onInvitationHandled },
             {
-              text: 'Aceptar',
+              text: language === 'en' ? 'Accept' : 'Aceptar',
               onPress: async () => {
                 try {
                   await acceptFamilyInvitation(accessToken, invitationToken);
                   await onFamiliesChanged();
                   Alert.alert('Invitacion aceptada', `Ya participas en ${invitation.familyName}.`);
                 } catch (caught) {
-                  setError(caught instanceof Error ? caught.message : 'No pudimos aceptar la invitacion.');
+        setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not accept the invitation.' : 'No pudimos aceptar la invitación.');
                 } finally {
                   onInvitationHandled();
                 }
@@ -885,7 +1022,7 @@ function ProtectedScreen({
         );
       })
       .catch((caught) => {
-        setError(caught instanceof Error ? caught.message : 'No pudimos revisar la invitacion.');
+        setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not review the invitation.' : 'No pudimos revisar la invitación.');
         onInvitationHandled();
       });
   }, [accessToken, invitationToken, reviewingInvitationToken]);
@@ -1143,19 +1280,19 @@ function ProtectedScreen({
 
   const confirmDeleteChild = (child: Family['children'][number]) => {
     Alert.alert(
-      'Eliminar hijo/a',
-      `¿Eliminar a ${child.firstName} ${child.lastName}?`,
+      language === 'en' ? 'Delete child' : 'Eliminar hijo/a',
+      language === 'en' ? `Delete ${child.firstName} ${child.lastName}?` : `¿Eliminar a ${child.firstName} ${child.lastName}?`,
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: language === 'en' ? 'Cancel' : 'Cancelar', style: 'cancel' },
         {
-          text: 'Eliminar',
+          text: language === 'en' ? 'Delete' : 'Eliminar',
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteChild(accessToken, child.id);
               await onFamiliesChanged();
             } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'No pudimos eliminar el hijo/a.');
+            setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not delete the child.' : 'No pudimos eliminar el hijo/a.');
             }
           },
         },
@@ -1171,12 +1308,12 @@ function ProtectedScreen({
       const invitation = await createFamilyInvitation(accessToken, primaryFamily.id, inviteEmail.trim() || undefined);
       await Share.share({
         title: 'Invitacion a Coparent Global',
-        message: `Te invito a compartir nuestra familia en Coparent Global: ${invitation.shareUrl}`,
+        message: buildFamilyInvitationShareMessage(invitation.shareUrl, language),
         url: invitation.shareUrl,
       });
       setInviteEmail('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos crear la invitacion.');
+      setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not create the invitation.' : 'No pudimos crear la invitación.');
     } finally {
       setIsInviting(false);
     }
@@ -1212,11 +1349,11 @@ function ProtectedScreen({
       return;
     }
     if (!calendarForm.childId || !calendarForm.currentParentId) {
-      setError('Selecciona un hijo/a y un progenitor responsable.');
+      setError('Seleccioná un hijo/a y un progenitor responsable.');
       return;
     }
     if (!calendarForm.startDate || !calendarForm.startTime || !calendarForm.endDate || !calendarForm.endTime) {
-      setError('Selecciona fecha y hora de inicio y fin.');
+      setError('Seleccioná fecha y hora de inicio y fin.');
       return;
     }
     setIsCreatingEvent(true);
@@ -1310,17 +1447,17 @@ function ProtectedScreen({
   };
 
   const confirmCancelEvent = (event: CalendarEvent) => {
-    Alert.alert('Cancelar evento', 'El evento quedara registrado como cancelado.', [
-      { text: 'Volver', style: 'cancel' },
+    Alert.alert(language === 'en' ? 'Cancel event' : 'Cancelar evento', language === 'en' ? 'The event will remain recorded as cancelled.' : 'El evento quedará registrado como cancelado.', [
+      { text: language === 'en' ? 'Back' : 'Volver', style: 'cancel' },
       {
-        text: 'Cancelar evento',
+        text: language === 'en' ? 'Cancel event' : 'Cancelar evento',
         style: 'destructive',
         onPress: async () => {
           try {
             await cancelCalendarEvent(accessToken, event.id);
             await refreshCalendarData();
           } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'No pudimos cancelar el evento.');
+          setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not cancel the event.' : 'No pudimos cancelar el evento.');
           }
         },
       },
@@ -1495,14 +1632,18 @@ function ProtectedScreen({
   const manageDeletionRequest = () => {
     const hasPending = Boolean(privacy?.deletionRequest);
     Alert.alert(
-      hasPending ? 'Cancelar eliminacion' : 'Solicitar eliminacion',
       hasPending
-        ? 'La cuenta continuara activa.'
-        : 'La solicitud sera revisada antes de eliminar datos compartidos o sujetos a conservacion.',
+        ? (language === 'en' ? 'Cancel deletion request' : 'Cancelar eliminación')
+        : (language === 'en' ? 'Request account deletion' : 'Solicitar eliminación'),
+      hasPending
+        ? (language === 'en' ? 'The account will remain active.' : 'La cuenta continuará activa.')
+        : (language === 'en'
+          ? 'The request will be reviewed before deleting shared data or records subject to retention.'
+          : 'La solicitud será revisada antes de eliminar datos compartidos o sujetos a conservación.'),
       [
-        { text: 'Volver', style: 'cancel' },
+        { text: language === 'en' ? 'Back' : 'Volver', style: 'cancel' },
         {
-          text: hasPending ? 'Cancelar solicitud' : 'Solicitar',
+          text: hasPending ? (language === 'en' ? 'Cancel request' : 'Cancelar solicitud') : (language === 'en' ? 'Request' : 'Solicitar'),
           style: hasPending ? 'default' : 'destructive',
           onPress: async () => {
             if (hasPending) await cancelAccountDeletion(accessToken);
@@ -1516,19 +1657,21 @@ function ProtectedScreen({
 
   const permanentlyDeleteAccount = () => {
     Alert.alert(
-      'Eliminar cuenta definitivamente',
-      'Se cerrara tu sesion y tus datos personales seran anonimizados. Los registros familiares compartidos pueden conservarse sin tus datos personales.',
+      language === 'en' ? 'Delete account permanently' : 'Eliminar cuenta definitivamente',
+      language === 'en'
+        ? 'Your session will be closed and your personal data will be anonymized. Shared family records may be retained without your personal data.'
+        : 'Se cerrará tu sesión y tus datos personales serán anonimizados. Los registros familiares compartidos pueden conservarse sin tus datos personales.',
       [
-        { text: 'Volver', style: 'cancel' },
+        { text: language === 'en' ? 'Back' : 'Volver', style: 'cancel' },
         {
-          text: 'Eliminar definitivamente',
+          text: language === 'en' ? 'Delete permanently' : 'Eliminar definitivamente',
           style: 'destructive',
           onPress: async () => {
             try {
               await confirmAccountDeletion(accessToken);
               await onLogout();
             } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'No pudimos eliminar la cuenta.');
+              setError(caught instanceof Error ? caught.message : language === 'en' ? 'We could not delete the account.' : 'No pudimos eliminar la cuenta.');
             }
           },
         },
@@ -1666,7 +1809,7 @@ function ProtectedScreen({
 
   const openWhatsApp = async () => {
     if (!whatsAppCode) return;
-    const message = buildWhatsAppLinkMessage(whatsAppCode.code);
+    const message = buildWhatsAppLinkMessage(whatsAppCode.code, language);
     try {
       await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(message)}`);
     } catch {
@@ -1739,7 +1882,7 @@ function ProtectedScreen({
       setCalendarEvents(events);
       setExpenses(latestExpenses);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos procesar la accion.');
+      setError(caught instanceof Error ? caught.message : 'No pudimos procesar la acción.');
     } finally {
       setProcessingWhatsAppActionId(null);
     }
@@ -1759,6 +1902,90 @@ function ProtectedScreen({
     }
   };
 
+  const shareBasicFamilySummary = async () => {
+    if (!primaryFamily) return;
+
+    const currency = expenseSummary?.currency ?? primaryFamily.settings?.currency ?? 'ARS';
+    const nextEvents = calendarEvents
+      .filter((event) => event.status !== 'CANCELLED')
+      .slice(0, 5)
+      .map((event) => `- ${event.title} | ${event.child.firstName} | ${formatDateTime(event.startDate)}`)
+      .join('\n') || (language === 'en' ? '- No upcoming events' : '- Sin eventos próximos');
+    const latestMessages = messages
+      .slice(0, 5)
+      .map((message) => `- ${message.sender.firstName}: ${message.content}`)
+      .join('\n') || (language === 'en' ? '- No family messages' : '- Sin mensajes familiares');
+    const latestExpenses = expenses
+      .slice(0, 5)
+      .map((expense) => `- ${expense.description}: ${formatCurrency(Number(expense.amount), currency)} (${expense.payer.firstName})`)
+      .join('\n') || (language === 'en' ? '- No recorded expenses' : '- Sin gastos registrados');
+
+    const message = language === 'en'
+      ? [
+          'Coparent Global - basic family summary',
+          '',
+          `Family: ${primaryFamily.tenant.name}`,
+          `Members: ${primaryFamily.members.length}`,
+          `Children: ${primaryFamily.children.map((child) => child.firstName).join(', ') || 'None'}`,
+          `Outstanding balance: ${formatCurrency(expenseSummary?.totalOutstanding ?? 0, currency)}`,
+          '',
+          'Upcoming events:',
+          nextEvents,
+          '',
+          'Latest messages:',
+          latestMessages,
+          '',
+          'Latest expenses:',
+          latestExpenses,
+          '',
+          'This is a basic operational summary. It is not a legal certificate or a verifiable audit export.',
+        ].join('\n')
+      : [
+          'Coparent Global - resumen familiar básico',
+          '',
+          `Familia: ${primaryFamily.tenant.name}`,
+          `Integrantes: ${primaryFamily.members.length}`,
+          `Hijos/as: ${primaryFamily.children.map((child) => child.firstName).join(', ') || 'Ninguno'}`,
+          `Saldo pendiente: ${formatCurrency(expenseSummary?.totalOutstanding ?? 0, currency)}`,
+          '',
+          'Próximos eventos:',
+          nextEvents,
+          '',
+          'Últimos mensajes:',
+          latestMessages,
+          '',
+          'Últimos gastos:',
+          latestExpenses,
+          '',
+          'Este es un resumen operativo básico. No es una constancia legal ni una exportación verificable.',
+        ].join('\n');
+
+    await Share.share({ title: t('basicExport'), message });
+    Alert.alert(t('basicExportReady'), t('basicExportCopy'));
+  };
+
+  const shareBasicFamilyHtmlExport = async () => {
+    if (!primaryFamily) return;
+
+    try {
+      const exportFile = await exportBasicFamilyHtml(accessToken, primaryFamily.id, language);
+      const fileUri = FileSystem.cacheDirectory ? `${FileSystem.cacheDirectory}${exportFile.fileName}` : null;
+      if (fileUri) {
+        await FileSystem.writeAsStringAsync(fileUri, exportFile.html, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      }
+      await Share.share({
+        title: t('basicExport'),
+        message: `${exportFile.text}\n\nSHA-256: ${exportFile.manifest.digest}`,
+        ...(fileUri ? { url: fileUri } : {}),
+      });
+      Alert.alert(t('basicExportReady'), `${exportFile.manifest.notice}\n\nSHA-256: ${exportFile.manifest.digest}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('basicExportCopy'));
+    }
+  };
+
   const birthDateOptions = birthDatePicker ? getBirthDateOptions(birthDatePicker, birthDateParts, language) : [];
   const calendarPickerOptions = calendarPicker ? getCalendarPickerOptions(calendarPicker, language) : [];
   const pendingWhatsAppActions = whatsAppActions.filter((action) => action.status === 'PENDING');
@@ -1767,6 +1994,9 @@ function ProtectedScreen({
     .filter((event) => event.status !== 'CANCELLED' && new Date(event.endDate).getTime() >= Date.now())
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0];
   const currentFamilyMember = primaryFamily?.members.find((member) => member.user.id === user.id);
+  const currentMessageContent = messageContent.trim();
+  const liveToneReview = currentMessageContent ? reviewMessageLocally(currentMessageContent, language) : null;
+  const displayedMessageReview = messageReviewContent === currentMessageContent ? messageReview : null;
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -1817,7 +2047,7 @@ function ProtectedScreen({
                     <View style={styles.dashboardItem}>
                       <Text style={styles.childName}>{upcomingEvent.title}</Text>
                       <Text style={styles.roleText}>{calendarEventTypeLabel(upcomingEvent.type, language)}</Text>
-                      <Text style={styles.childDate}>{upcomingEvent.child.firstName} - responsable: {upcomingEvent.currentParent.firstName}</Text>
+                      <Text style={styles.childDate}>{upcomingEvent.child.firstName} - {language === 'en' ? 'responsible' : 'responsable'}: {upcomingEvent.currentParent.firstName}</Text>
                       <Text style={styles.childDate}>{formatDateTime(upcomingEvent.startDate)} - {formatDateTime(upcomingEvent.endDate)}</Text>
                     </View>
                   ) : (
@@ -1843,6 +2073,14 @@ function ProtectedScreen({
                     <Pressable onPress={() => setActiveTab('settings')} style={styles.quickActionButton}>
                       <MessageCircle color="#0f766e" size={18} />
                       <Text style={styles.quickActionText}>{t('reviewWhatsApp')}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setActiveTab('privacy')} style={styles.quickActionButton}>
+                      <ShieldCheck color="#0f766e" size={18} />
+                      <Text style={styles.quickActionText}>{t('privacy')}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setActiveTab('exports')} style={styles.quickActionButton}>
+                      <ReceiptText color="#0f766e" size={18} />
+                      <Text style={styles.quickActionText}>{t('basicExport')}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1908,17 +2146,17 @@ function ProtectedScreen({
         {activeTab === 'calendar' ? (
           <>
             <View style={styles.header}>
-              <Text style={styles.kicker}>Organizacion familiar</Text>
-              <Text style={styles.title}>Calendario</Text>
-              <Text style={styles.subtitle}>Registra con quien estara cada hijo/a.</Text>
+              <Text style={styles.kicker}>{language === 'en' ? 'Family organization' : 'Organización familiar'}</Text>
+              <Text style={styles.title}>{t('calendar')}</Text>
+              <Text style={styles.subtitle}>{language === 'en' ? 'Record who is responsible for each child and when.' : 'Registrá quién estará a cargo de cada hijo/a y cuándo.'}</Text>
             </View>
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>Próximos eventos</Text>
+              <Text style={styles.cardLabel}>{language === 'en' ? 'Upcoming events' : 'Próximos eventos'}</Text>
               {calendarEvents.length ? calendarEvents.map((event) => (
                 <View key={event.id} style={styles.eventItem}>
                   <Text style={styles.childName}>{event.title}</Text>
                   <Text style={styles.roleText}>{calendarEventTypeLabel(event.type, language)}</Text>
-                  <Text style={styles.childDate}>{event.child.firstName} - responsable: {event.currentParent.firstName}</Text>
+                  <Text style={styles.childDate}>{event.child.firstName} - {language === 'en' ? 'responsible' : 'responsable'}: {event.currentParent.firstName}</Text>
                   <Text style={styles.childDate}>{formatDateTime(event.startDate)} - {formatDateTime(event.endDate)}</Text>
                   {event.location ? <Text style={styles.childDate}>{event.location}</Text> : null}
                   <Text style={event.status === 'CANCELLED' ? styles.cancelledText : styles.roleText}>{calendarEventStatusLabel(event.status, language)}</Text>
@@ -1927,50 +2165,50 @@ function ProtectedScreen({
                       {canDirectlyEditEvent(event) ? (
                         <>
                           <Pressable onPress={() => startEditingEvent(event)} style={styles.smallButton}>
-                            <Text style={styles.smallButtonText}>Editar</Text>
+                            <Text style={styles.smallButtonText}>{language === 'en' ? 'Edit' : 'Editar'}</Text>
                           </Pressable>
                           <Pressable onPress={() => confirmCancelEvent(event)} style={styles.dangerButton}>
-                            <Text style={styles.dangerButtonText}>Cancelar</Text>
+                            <Text style={styles.dangerButtonText}>{language === 'en' ? 'Cancel' : 'Cancelar'}</Text>
                           </Pressable>
                         </>
                       ) : (
                         <Pressable onPress={() => startChangeRequest(event)} style={styles.smallButton}>
-                          <Text style={styles.smallButtonText}>Solicitar cambio</Text>
+                          <Text style={styles.smallButtonText}>{language === 'en' ? 'Request change' : 'Solicitar cambio'}</Text>
                         </Pressable>
                       )}
                     </View>
                   ) : null}
                 </View>
-              )) : <Text style={styles.emptyText}>Todavía no hay eventos cargados.</Text>}
+              )) : <Text style={styles.emptyText}>{language === 'en' ? 'There are no events yet.' : 'Todavía no hay eventos cargados.'}</Text>}
             </View>
             {calendarChangeRequests.filter((request) => request.status === 'PENDING').length ? (
               <View style={styles.card}>
-                <Text style={styles.cardLabel}>Solicitudes pendientes</Text>
+                <Text style={styles.cardLabel}>{language === 'en' ? 'Pending requests' : 'Solicitudes pendientes'}</Text>
                 {calendarChangeRequests.filter((request) => request.status === 'PENDING').map((request) => (
                   <View key={request.id} style={styles.eventItem}>
-                    <Text style={styles.childName}>{request.reason || 'Cambio de horario solicitado'}</Text>
+                    <Text style={styles.childName}>{request.reason || (language === 'en' ? 'Schedule change requested' : 'Cambio de horario solicitado')}</Text>
                     <Text style={styles.childDate}>{formatDateTime(request.newStartDate)} - {formatDateTime(request.newEndDate)}</Text>
                     {request.requestedById !== user.id && request.calendarEvent && canDirectlyEditEvent(request.calendarEvent) ? (
                       <View style={styles.actionRow}>
                         <Pressable onPress={() => resolveChangeRequestAction(request.id, 'ACCEPTED')} style={styles.smallButton}>
-                          <Text style={styles.smallButtonText}>Aceptar</Text>
+                          <Text style={styles.smallButtonText}>{language === 'en' ? 'Accept' : 'Aceptar'}</Text>
                         </Pressable>
                         <Pressable onPress={() => resolveChangeRequestAction(request.id, 'REJECTED')} style={styles.dangerButton}>
-                          <Text style={styles.dangerButtonText}>Rechazar</Text>
+                          <Text style={styles.dangerButtonText}>{language === 'en' ? 'Reject' : 'Rechazar'}</Text>
                         </Pressable>
                       </View>
-                    ) : <Text style={styles.pendingText}>Esperando respuesta</Text>}
+                    ) : <Text style={styles.pendingText}>{language === 'en' ? 'Waiting for response' : 'Esperando respuesta'}</Text>}
                   </View>
                 ))}
               </View>
             ) : null}
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>{changeRequestEventId ? 'Solicitud de cambio' : editingEventId ? 'Editar evento' : 'Nuevo evento'}</Text>
-              <Text style={styles.emptyTitle}>{changeRequestEventId ? 'Proponer nuevo horario' : 'Organizar actividad'}</Text>
+              <Text style={styles.cardLabel}>{changeRequestEventId ? (language === 'en' ? 'Change request' : 'Solicitud de cambio') : editingEventId ? (language === 'en' ? 'Edit event' : 'Editar evento') : (language === 'en' ? 'New event' : 'Nuevo evento')}</Text>
+              <Text style={styles.emptyTitle}>{changeRequestEventId ? (language === 'en' ? 'Propose a new time' : 'Proponer nuevo horario') : (language === 'en' ? 'Organize activity' : 'Organizar actividad')}</Text>
               {!changeRequestEventId ? (
                 <>
-                  <Field label="Nombre del evento" value={calendarForm.title} onChangeText={(value) => setCalendarForm((current) => ({ ...current, title: value }))} placeholder="Ej: Consulta con pediatra" />
-                  <Text style={styles.label}>Tipo de evento</Text>
+                  <Field label={language === 'en' ? 'Event name' : 'Nombre del evento'} value={calendarForm.title} onChangeText={(value) => setCalendarForm((current) => ({ ...current, title: value }))} placeholder={language === 'en' ? 'Example: Pediatric appointment' : 'Ej: Consulta con pediatra'} />
+                  <Text style={styles.label}>{language === 'en' ? 'Event type' : 'Tipo de evento'}</Text>
                   <View style={styles.choiceRow}>
                     {calendarEventTypes.map((type) => (
                       <ChoiceButton
@@ -1983,7 +2221,7 @@ function ProtectedScreen({
                   </View>
                 </>
               ) : null}
-              <Text style={styles.label}>Hijo/a</Text>
+              <Text style={styles.label}>{language === 'en' ? 'Child' : 'Hijo/a'}</Text>
               <View style={styles.choiceRow}>
                 {primaryFamily?.children.map((child) => (
                   <ChoiceButton
@@ -1994,7 +2232,7 @@ function ProtectedScreen({
                   />
                 ))}
               </View>
-              <Text style={styles.label}>Progenitor responsable</Text>
+              <Text style={styles.label}>{language === 'en' ? 'Responsible parent' : 'Progenitor responsable'}</Text>
               <View style={styles.choiceRow}>
                 {primaryFamily?.members.map((member) => (
                   <ChoiceButton
@@ -2005,32 +2243,32 @@ function ProtectedScreen({
                   />
                 ))}
               </View>
-              <Text style={styles.label}>Inicio</Text>
+              <Text style={styles.label}>{language === 'en' ? 'Start' : 'Inicio'}</Text>
               <View style={styles.dateSelectRow}>
-                <DateSelect label="Fecha" value={calendarForm.startDate} placeholder="Elegir fecha" onPress={() => setCalendarPicker('startDate')} />
-                <DateSelect label="Hora" value={calendarForm.startTime} placeholder="Elegir hora" onPress={() => setCalendarPicker('startTime')} />
+                <DateSelect label={language === 'en' ? 'Date' : 'Fecha'} value={calendarForm.startDate} placeholder={language === 'en' ? 'Choose date' : 'Elegir fecha'} onPress={() => setCalendarPicker('startDate')} />
+                <DateSelect label={language === 'en' ? 'Time' : 'Hora'} value={calendarForm.startTime} placeholder={language === 'en' ? 'Choose time' : 'Elegir hora'} onPress={() => setCalendarPicker('startTime')} />
               </View>
-              <Text style={styles.label}>Fin</Text>
+              <Text style={styles.label}>{language === 'en' ? 'End' : 'Fin'}</Text>
               <View style={styles.dateSelectRow}>
-                <DateSelect label="Fecha" value={calendarForm.endDate} placeholder="Elegir fecha" onPress={() => setCalendarPicker('endDate')} />
-                <DateSelect label="Hora" value={calendarForm.endTime} placeholder="Elegir hora" onPress={() => setCalendarPicker('endTime')} />
+                <DateSelect label={language === 'en' ? 'Date' : 'Fecha'} value={calendarForm.endDate} placeholder={language === 'en' ? 'Choose date' : 'Elegir fecha'} onPress={() => setCalendarPicker('endDate')} />
+                <DateSelect label={language === 'en' ? 'Time' : 'Hora'} value={calendarForm.endTime} placeholder={language === 'en' ? 'Choose time' : 'Elegir hora'} onPress={() => setCalendarPicker('endTime')} />
               </View>
               {!changeRequestEventId ? (
                 <>
-                  <Field label="Ubicación opcional" value={calendarForm.location} onChangeText={(value) => setCalendarForm((current) => ({ ...current, location: value }))} />
-                  <Field label="Notas opcionales" value={calendarForm.notes} onChangeText={(value) => setCalendarForm((current) => ({ ...current, notes: value }))} multiline />
+                  <Field label={language === 'en' ? 'Optional location' : 'Ubicación opcional'} value={calendarForm.location} onChangeText={(value) => setCalendarForm((current) => ({ ...current, location: value }))} />
+                  <Field label={language === 'en' ? 'Optional notes' : 'Notas opcionales'} value={calendarForm.notes} onChangeText={(value) => setCalendarForm((current) => ({ ...current, notes: value }))} multiline />
                 </>
               ) : null}
               {changeRequestEventId ? (
-                <Field label="Motivo opcional" value={changeReason} onChangeText={setChangeReason} multiline />
+                <Field label={language === 'en' ? 'Optional reason' : 'Motivo opcional'} value={changeReason} onChangeText={setChangeReason} multiline />
               ) : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Pressable disabled={isCreatingEvent} onPress={changeRequestEventId ? submitChangeRequest : submitCalendarEvent} style={[styles.primaryButton, isCreatingEvent ? styles.disabled : undefined]}>
-                {isCreatingEvent ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{changeRequestEventId ? 'Enviar solicitud' : editingEventId ? 'Guardar evento' : 'Crear evento'}</Text>}
+                {isCreatingEvent ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryButtonText}>{changeRequestEventId ? (language === 'en' ? 'Send request' : 'Enviar solicitud') : editingEventId ? (language === 'en' ? 'Save event' : 'Guardar evento') : (language === 'en' ? 'Create event' : 'Crear evento')}</Text>}
               </Pressable>
               {editingEventId || changeRequestEventId ? (
                 <Pressable onPress={() => { setEditingEventId(null); setChangeRequestEventId(null); setChangeReason(''); }} style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Volver a nuevo evento</Text>
+                  <Text style={styles.secondaryButtonText}>{language === 'en' ? 'Back to new event' : 'Volver a nuevo evento'}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -2065,16 +2303,27 @@ function ProtectedScreen({
                 ))}
               </View>
               <Field label={t('message')} value={messageContent} onChangeText={(value) => { setMessageContent(value); setMessageReview(null); setMessageReviewContent(''); }} multiline />
-              {messageReview?.needsReview ? (
-                <View style={styles.assistantNotice}>
+              {displayedMessageReview?.needsReview ? (
+                <View style={[styles.assistantNotice, styles.assistantNoticeWarning]}>
                   <Text style={styles.assistantTitle}>{t('conflictSuggestion')}</Text>
-                  {messageReview.reasons.map((reason) => <Text key={reason} style={styles.assistantReason}>{reason}</Text>)}
-                  <Text style={styles.messageText}>{messageReview.suggestion}</Text>
-                  <Pressable onPress={() => setMessageContent(messageReview.suggestion ?? messageContent)} style={styles.smallButton}>
+                  <Text style={styles.assistantReason}>{t('reviewBeforeSend')}</Text>
+                  {displayedMessageReview.reasons.map((reason) => <Text key={reason} style={styles.assistantReason}>{reason}</Text>)}
+                  <Text style={styles.messageText}>{displayedMessageReview.suggestion}</Text>
+                  <Pressable onPress={() => setMessageContent(displayedMessageReview.suggestion ?? messageContent)} style={styles.smallButton}>
                     <Text style={styles.smallButtonText}>{t('useSuggestion')}</Text>
                   </Pressable>
                 </View>
-              ) : messageReview ? <Text style={styles.connectedText}>{t('clearNeutralMessage')}</Text> : null}
+              ) : liveToneReview?.needsReview ? (
+                <View style={[styles.assistantNotice, styles.assistantNoticeWarning]}>
+                  <Text style={styles.assistantTitle}>{t('conflictSuggestion')}</Text>
+                  <Text style={styles.assistantReason}>{t('reviewBeforeSend')}</Text>
+                  {liveToneReview.reasons.map((reason) => <Text key={reason} style={styles.assistantReason}>{reason}</Text>)}
+                  <Text style={styles.messageText}>{liveToneReview.suggestion}</Text>
+                  <Pressable onPress={() => setMessageContent(liveToneReview.suggestion ?? messageContent)} style={styles.smallButton}>
+                    <Text style={styles.smallButtonText}>{t('useSuggestion')}</Text>
+                  </Pressable>
+                </View>
+              ) : displayedMessageReview ? <Text style={styles.connectedText}>{t('clearNeutralMessage')}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <View style={styles.actionRow}>
                 <Pressable disabled={!messageContent.trim()} onPress={reviewMessage} style={styles.secondaryCompactButton}>
@@ -2252,6 +2501,89 @@ function ProtectedScreen({
                 </>
               ) : null}
             </View>
+            <Pressable onPress={() => setActiveTab('privacy')} style={styles.privacyHighlight}>
+              <View style={styles.privacyHighlightIcon}>
+                <ShieldCheck color="#0f766e" size={22} />
+              </View>
+              <View style={styles.settingCopy}>
+                <Text style={styles.childName}>{t('privacyCenter')}</Text>
+                <Text style={styles.childDate}>{t('privacyVisibleCopy')}</Text>
+              </View>
+            </Pressable>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>{t('languagePrivacy')}</Text>
+              <Text style={styles.emptyText}>{t('privacyVisibleCopy')}</Text>
+              <Pressable onPress={() => setActiveTab('privacy')} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>{t('privacyCenter')}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>{t('familySettings')}</Text>
+              <Text style={styles.emptyText}>{t('familySettingsCopy')}</Text>
+              <Pressable onPress={() => setActiveTab('settings')} style={styles.secondaryIconButton}>
+                <Settings color="#0f766e" size={18} />
+                <Text style={styles.secondaryCompactText}>{t('manageFamily')}</Text>
+              </Pressable>
+            </View>
+            {primaryFamily && subscriptionState ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('plansAndSubscription')}</Text>
+                <Text style={styles.emptyTitle}>{subscriptionPlanName(subscriptionState.effectivePlan, t)}</Text>
+                <Text style={styles.emptyText}>
+                  {subscriptionState.subscription.status === 'TRIALING' && subscriptionState.subscription.trialEndsAt
+                    ? `${t('premiumTrial')} - ${daysUntil(subscriptionState.subscription.trialEndsAt)} ${t('trialDaysRemaining')}`
+                    : t('familyWidePlan')}
+                </Text>
+                <Pressable onPress={() => setActiveTab('plans')} style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>{t('comparePlans')}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>{language === 'en' ? 'Exports' : 'Exportaciones'}</Text>
+              <Text style={styles.emptyText}>{t('basicExportCopy')}</Text>
+              <Pressable onPress={() => setActiveTab('exports')} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>{language === 'en' ? 'Open exports' : 'Abrir exportaciones'}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>{t('informationHelp')}</Text>
+              <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>{t('privacyPolicy')}</Text>
+              </Pressable>
+              <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/terms`)} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>{t('terms')}</Text>
+              </Pressable>
+              <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/support`)} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>{t('support')}</Text>
+              </Pressable>
+            </View>
+            <Pressable accessibilityRole="button" onPress={onLogout} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{t('logout')}</Text>
+            </Pressable>
+          </>
+        ) : null}
+
+        {activeTab === 'privacy' ? (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.kicker}>{t('privacy')}</Text>
+              <Text style={styles.title}>{t('privacyCenter')}</Text>
+              <Text style={styles.subtitle}>{t('privacyVisibleCopy')}</Text>
+            </View>
+            <View style={styles.privacyHighlight}>
+              <View style={styles.privacyHighlightIcon}>
+                <ShieldCheck color="#0f766e" size={22} />
+              </View>
+              <View style={styles.settingCopy}>
+                <Text style={styles.childName}>{language === 'en' ? 'Sensitive family data' : 'Datos familiares sensibles'}</Text>
+                <Text style={styles.childDate}>
+                  {language === 'en'
+                    ? 'Coparent Global should help organize information without exposing children or family conflict.'
+                    : 'Coparent Global debe ayudar a organizar información sin exponer a los hijos/as ni el conflicto familiar.'}
+                </Text>
+              </View>
+            </View>
             <View style={styles.card}>
               <Text style={styles.cardLabel}>{t('languagePrivacy')}</Text>
               <View style={styles.choiceRow}>
@@ -2286,41 +2618,10 @@ function ProtectedScreen({
               </Pressable>
               {privacy?.deletionRequest ? (
                 <Pressable onPress={permanentlyDeleteAccount} style={styles.dangerOutlineButton}>
-                  <Text style={styles.dangerButtonText}>Eliminar cuenta definitivamente</Text>
+                  <Text style={styles.dangerButtonText}>{language === 'en' ? 'Delete account permanently' : 'Eliminar cuenta definitivamente'}</Text>
                 </Pressable>
               ) : null}
             </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>{t('familySettings')}</Text>
-              <Text style={styles.emptyText}>{t('familySettingsCopy')}</Text>
-              <Pressable onPress={() => setActiveTab('settings')} style={styles.secondaryIconButton}>
-                <Settings color="#0f766e" size={18} />
-                <Text style={styles.secondaryCompactText}>{t('manageFamily')}</Text>
-              </Pressable>
-            </View>
-            {primaryFamily && subscriptionState ? (
-              <View style={styles.card}>
-                <Text style={styles.cardLabel}>{t('plansAndSubscription')}</Text>
-                <Text style={styles.emptyTitle}>{subscriptionPlanName(subscriptionState.effectivePlan, t)}</Text>
-                <Text style={styles.emptyText}>
-                  {subscriptionState.subscription.status === 'TRIALING' && subscriptionState.subscription.trialEndsAt
-                    ? `${t('premiumTrial')} - ${daysUntil(subscriptionState.subscription.trialEndsAt)} ${t('trialDaysRemaining')}`
-                    : t('familyWidePlan')}
-                </Text>
-                <Pressable onPress={() => setActiveTab('plans')} style={styles.primaryButton}>
-                  <Text style={styles.primaryButtonText}>{t('comparePlans')}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {primaryFamily && subscriptionState?.entitlements.verifiedAuditExports ? (
-              <View style={styles.card}>
-                <Text style={styles.cardLabel}>{t('exportFamilyArchive')}</Text>
-                <Text style={styles.emptyText}>{t('exportFamilyArchiveCopy')}</Text>
-                <Pressable onPress={shareVerifiedArchive} style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>{t('exportFamilyArchive')}</Text>
-                </Pressable>
-              </View>
-            ) : null}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>{t('informationHelp')}</Text>
               <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)} style={styles.secondaryButton}>
@@ -2329,12 +2630,59 @@ function ProtectedScreen({
               <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/terms`)} style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>{t('terms')}</Text>
               </Pressable>
-              <Pressable onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/support`)} style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>{t('support')}</Text>
-              </Pressable>
             </View>
-            <Pressable accessibilityRole="button" onPress={onLogout} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>{t('logout')}</Text>
+            <Pressable onPress={() => setActiveTab('profile')} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{language === 'en' ? 'Back to profile' : 'Volver al perfil'}</Text>
+            </Pressable>
+          </>
+        ) : null}
+
+        {activeTab === 'exports' ? (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.kicker}>{language === 'en' ? 'Family records' : 'Registros familiares'}</Text>
+              <Text style={styles.title}>{language === 'en' ? 'Exports' : 'Exportaciones'}</Text>
+              <Text style={styles.subtitle}>
+                {language === 'en'
+                  ? 'Share a simple summary or generate a verifiable archive when your plan allows it.'
+                  : 'Compartí un resumen simple o generá un archivo verificable cuando tu plan lo permita.'}
+              </Text>
+            </View>
+            {primaryFamily ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('basicExport')}</Text>
+                <Text style={styles.emptyText}>{t('basicExportCopy')}</Text>
+                <Pressable onPress={shareBasicFamilyHtmlExport} style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>{t('basicExport')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('myFamily')}</Text>
+                <Text style={styles.emptyText}>{language === 'en' ? 'Create a family before exporting records.' : 'Creá una familia antes de exportar registros.'}</Text>
+              </View>
+            )}
+            {primaryFamily && subscriptionState?.entitlements.verifiedAuditExports ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('exportFamilyArchive')}</Text>
+                <Text style={styles.emptyText}>{t('exportFamilyArchiveCopy')}</Text>
+                <Pressable onPress={shareVerifiedArchive} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>{t('exportFamilyArchive')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('exportFamilyArchive')}</Text>
+                <Text style={styles.emptyText}>
+                  {language === 'en'
+                    ? 'Verifiable exports are available in higher plans. Basic summaries are free.'
+                    : 'Las exportaciones verificables están disponibles en planes superiores. Los resúmenes básicos son gratis.'}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.legalNotice}>{t('legalNotice')}</Text>
+            <Pressable onPress={() => setActiveTab('profile')} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{language === 'en' ? 'Back to profile' : 'Volver al perfil'}</Text>
             </Pressable>
           </>
         ) : null}
@@ -2483,6 +2831,11 @@ function ProtectedScreen({
                 <View style={styles.card}>
                   <Text style={styles.cardLabel}>{t('sharedFamily')}</Text>
                   <Text style={styles.cardValue}>{primaryFamily.tenant.name}</Text>
+                  <Text style={styles.emptyText}>
+                    {language === 'en'
+                      ? 'The invitation includes a Google Play test link, a family invitation link, and a short explanation of what Coparent Global does.'
+                      : 'La invitación incluye el link de prueba de Google Play, el link para unirse a la familia y una explicación corta de qué hace Coparent Global.'}
+                  </Text>
                   {primaryFamily.members.map((member) => (
                     <View key={member.id} style={styles.memberItem}>
                       <View>
@@ -2571,18 +2924,21 @@ function ProtectedScreen({
                   {whatsAppCode ? (
                     <View style={styles.whatsAppCodeBox}>
                       <Text style={styles.cardLabel}>{t('whatsappLinkInstruction')}</Text>
-                      <Text selectable style={styles.whatsAppCode}>{buildWhatsAppLinkMessage(whatsAppCode.code)}</Text>
-                      <Text style={styles.cardLabel}>{t('whatsappManualCode')}</Text>
-                      <Text selectable style={styles.childName}>VINCULAR {whatsAppCode.code}</Text>
-                      <Text style={styles.childDate}>{t('expires')}: {formatDateTime(whatsAppCode.expiresAt)}</Text>
+                      <Text selectable style={styles.whatsAppCode}>{buildWhatsAppLinkMessage(whatsAppCode.code, language)}</Text>
                       <Pressable onPress={openWhatsApp} style={styles.secondaryButton}>
                         <Text style={styles.secondaryButtonText}>{t('openWhatsApp')}</Text>
                       </Pressable>
+                      <Text style={styles.legalNotice}>
+                        {language === 'en'
+                          ? `Manual code only if WhatsApp asks for it: VINCULAR ${whatsAppCode.code}`
+                          : `Código manual solo si WhatsApp lo pide: VINCULAR ${whatsAppCode.code}`}
+                      </Text>
+                      <Text style={styles.childDate}>{t('expires')}: {formatDateTime(whatsAppCode.expiresAt)}</Text>
                     </View>
                   ) : null}
                   <Text style={styles.label}>{t('examples')}</Text>
-                  <Text style={styles.childDate}>Gaste $35.000 en utiles escolares</Text>
-                  <Text style={styles.childDate}>CALENDARIO | Mateo | 2026-06-10 18:00 | 2026-06-12 18:00</Text>
+                  <Text style={styles.childDate}>{language === 'en' ? 'I paid $35,000 for school supplies' : 'Gasté $35.000 en útiles escolares'}</Text>
+                  <Text style={styles.childDate}>{language === 'en' ? 'CALENDAR | Mateo | 2026-06-10 18:00 | 2026-06-12 18:00' : 'CALENDARIO | Mateo | 2026-06-10 18:00 | 2026-06-12 18:00'}</Text>
                 </View>
                 <View style={styles.card}>
                   <Text style={styles.cardLabel}>{t('pendingApproval')}</Text>
@@ -2738,7 +3094,7 @@ function ProtectedScreen({
         <TabButton icon={CalendarDays} label={t('calendar')} active={activeTab === 'calendar'} onPress={() => setActiveTab('calendar')} />
         <TabButton icon={MessageCircle} label={t('messages')} active={activeTab === 'messages'} onPress={() => setActiveTab('messages')} />
         <TabButton icon={ReceiptText} label={t('expenses')} active={activeTab === 'expenses'} onPress={() => setActiveTab('expenses')} />
-        <TabButton icon={UserRound} label={t('profile')} active={activeTab === 'profile' || activeTab === 'plans' || activeTab === 'settings'} onPress={() => setActiveTab('profile')} />
+        <TabButton icon={UserRound} label={t('profile')} active={activeTab === 'profile' || activeTab === 'plans' || activeTab === 'settings' || activeTab === 'privacy' || activeTab === 'exports'} onPress={() => setActiveTab('profile')} />
       </View>
     </SafeAreaView>
   );
@@ -2838,14 +3194,49 @@ function calendarEventStatusLabel(status: CalendarEvent['status'], language: Sup
   return labels[status]?.[language] ?? status;
 }
 
-function buildWhatsAppLinkMessage(code: string) {
+function buildFamilyInvitationShareMessage(invitationUrl: string, language: SupportedLanguage) {
+  if (language === 'en') {
+    return [
+      'I invited you to Coparent Global.',
+      'It helps separated or co-parenting families organize calendar, messages, expenses, and responsibilities with less conflict.',
+      '',
+      `1. Join the test on Google Play: ${playTestingUrl}`,
+      `2. Open the family invitation: ${invitationUrl}`,
+      '3. If Google Play says the app is unavailable, tell me which Gmail account you are using so I can add it as a tester.',
+    ].join('\n');
+  }
+
   return [
-    'Te invito a vincular WhatsApp con Coparent Global.',
-    `1. Entra a ${PUBLIC_WEB_URL}`,
-    '2. Instala o abre la app.',
-    `3. Envía este mensaje al WhatsApp oficial de Coparent: VINCULAR ${code}`,
+    'Te invité a Coparent Global.',
+    'Es una app para familias separadas o coparentales: organiza calendario, mensajes, gastos y responsabilidades con menos conflicto.',
     '',
-    'Nada se registra automáticamente. Toda acción enviada por WhatsApp queda pendiente hasta que la confirmes dentro de la app.',
+    `1. Sumate a la prueba en Google Play: ${playTestingUrl}`,
+    `2. Abrí la invitación familiar: ${invitationUrl}`,
+    '3. Si Google Play dice que no está disponible, pasame el Gmail que usás en el celular para agregarte como tester.',
+  ].join('\n');
+}
+
+function buildWhatsAppLinkMessage(code: string, language: SupportedLanguage) {
+  if (language === 'en') {
+    return [
+      'Coparent Global helps co-parenting families organize calendar, messages, expenses, and responsibilities with less conflict.',
+      '',
+      `Download or open the test app: ${playTestingUrl}`,
+      `Then send this code to the official Coparent WhatsApp: LINK ${code}`,
+      '',
+      'Nothing is recorded automatically. Anything sent through WhatsApp remains pending until you confirm it inside the app.',
+      'If Google Play says the app is unavailable, send the Gmail account used on the phone so it can be added as a tester.',
+    ].join('\n');
+  }
+
+  return [
+    'Coparent Global ayuda a familias separadas o coparentales a organizar calendario, mensajes, gastos y responsabilidades con menos conflicto.',
+    '',
+    `Descargá o abrí la app de prueba: ${playTestingUrl}`,
+    `Después enviá este código al WhatsApp oficial de Coparent: VINCULAR ${code}`,
+    '',
+    'Nada se registra automáticamente. Todo lo enviado por WhatsApp queda pendiente hasta que lo confirmes dentro de la app.',
+    'Si Google Play dice que la app no está disponible, enviá el Gmail usado en el celular para agregarlo como tester.',
   ].join('\n');
 }
 
@@ -2905,19 +3296,35 @@ const localHostileTonePatterns = [
   /\binutil\b/,
   /\bmierda\b/,
   /\bforr[oa]s?\b/,
+  /\bforr[ei]s?\b/,
   /\bput[ao]s?\b/,
+  /\bput[ei]s?\b/,
   /\bhij[oa]\s+de\s+put[ao]\b/,
+  /\bhij[oa]\s+de\s+put[aeio]s?\b/,
+  /\bputa\s+madre\b/,
   /\bmal\s+parid[ao]\b/,
+  /\bmal[ae]s?\s+madres?\b/,
+  /\bmal[ao]s?\s+padres?\b/,
   /\bmal\s+madre\b/,
   /\bmal\s+padre\b/,
   /\bbasura\b/,
   /\bpelotud[oa]s?\b/,
   /\bbolud[oa]s?\b/,
+  /\btarad[oa]s?\b/,
+  /\bsoret[ea]s?\b/,
+  /\bconchud[oa]s?\b/,
+  /\bcagon[ea]s?\b/,
+  /\bdesgraciad[oa]s?\b/,
+  /\basqueros[oa]s?\b/,
   /\bhdp\b/,
   /\bshut up\b/,
   /\bidiot\b/,
   /\bstupid\b/,
+  /\bmoron\b/,
+  /\bdumb\b/,
+  /\buseless\b/,
   /\bfuck(?:ing)?\b/,
+  /\bpiece of shit\b/,
   /\basshole\b/,
   /\bbitch\b/,
 ];
@@ -2926,9 +3333,17 @@ const localAccusatoryTonePatterns = [
   /\bsiempre\b/,
   /\bnunca\b/,
   /\btu culpa\b/,
+  /\bpor tu culpa\b/,
+  /\bno te importa\b/,
+  /\bsos un[ao]\b/,
+  /\beres un[ao]\b/,
+  /\bme tenes cansad[oa]\b/,
+  /\bme tienes cansad[oa]\b/,
   /\byour fault\b/,
   /\byou always\b/,
   /\byou never\b/,
+  /\byou do not care\b/,
+  /\byou don't care\b/,
 ];
 
 function reviewMessageLocally(content: string, language: SupportedLanguage): MessageReview {
@@ -3100,6 +3515,83 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
   },
+  authValueGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  authValuePill: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    color: '#0b5f59',
+    fontSize: 12,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  authTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  onboardingPanel: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+    padding: 16,
+  },
+  onboardingActionGrid: {
+    gap: 10,
+  },
+  onboardingPrimaryAction: {
+    alignItems: 'center',
+    backgroundColor: '#0f766e',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 50,
+    paddingHorizontal: 14,
+  },
+  onboardingPrimaryText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  onboardingSecondaryAction: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 14,
+  },
+  onboardingSecondaryText: {
+    color: '#172033',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  onboardingQuietAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 42,
+  },
+  onboardingQuietText: {
+    color: '#0f766e',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   buildBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#e6f3f1',
@@ -3111,6 +3603,28 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  languageToggle: {
+    backgroundColor: '#e8edf4',
+    borderRadius: 8,
+    flexDirection: 'row',
+    padding: 3,
+  },
+  languageButton: {
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  languageButtonActive: {
+    backgroundColor: '#ffffff',
+  },
+  languageButtonText: {
+    color: '#5d6b82',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  languageButtonTextActive: {
+    color: '#0b5f59',
   },
   segmented: {
     backgroundColor: '#e8edf4',
@@ -3292,6 +3806,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 6,
     padding: 18,
+  },
+  privacyHighlight: {
+    alignItems: 'flex-start',
+    backgroundColor: '#e6f3f1',
+    borderColor: '#99d4cc',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+  },
+  privacyHighlightIcon: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
   },
   currentPlanCard: {
     backgroundColor: '#123c36',
@@ -3814,13 +4346,17 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
   },
+  assistantNoticeWarning: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+  },
   assistantTitle: {
-    color: '#92400e',
+    color: '#be123c',
     fontSize: 15,
     fontWeight: '800',
   },
   assistantReason: {
-    color: '#92400e',
+    color: '#be123c',
     fontSize: 13,
     lineHeight: 18,
   },

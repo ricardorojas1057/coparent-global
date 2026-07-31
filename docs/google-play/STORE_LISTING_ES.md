@@ -6,23 +6,27 @@ Coparent Global
 
 ## Descripcion corta
 
-Calendario, mensajes y gastos para una coparentalidad clara y organizada.
+Calendario, mensajes y gastos para coparentalidad privada y organizada.
 
 ## Descripcion completa
 
-Coparent Global ayuda a las personas adultas responsables a organizar la coparentalidad con informacion clara, acciones confirmadas y foco en el bienestar de los hijos.
+Coparent Global ayuda a familias separadas o coparentales a organizar la vida familiar diaria en un solo lugar.
 
-Funciones principales:
+Con la app podes:
 
-- Calendario familiar con responsables, horarios y solicitudes de cambio.
-- Mensajeria familiar registrada y asistente de tono neutral.
-- Gastos compartidos, comprobantes, reembolsos, saldos y reportes mensuales.
-- Modos cooperativo, comunicacion estructurada y alto conflicto.
-- Invitaciones familiares mediante enlaces protegidos.
-- Espanol e ingles, soporte offline inicial y controles de privacidad.
-- Solicitud de eliminacion de cuenta desde la aplicacion.
+- Crear eventos, horarios y responsables familiares.
+- Registrar mensajes importantes en un espacio familiar privado.
+- Revisar el tono de un mensaje antes de enviarlo.
+- Organizar gastos compartidos, pagos hechos por una parte y saldos pendientes.
+- Guardar comprobantes y generar reportes basicos.
+- Invitar al otro progenitor mediante enlaces seguros.
+- Configurar modos de coparentalidad segun el nivel de cooperacion.
+- Usar la app en espanol o ingles.
+- Solicitar la eliminacion de cuenta y datos desde la app o desde la web.
 
-Coparent Global no es un servicio de emergencias ni brinda asesoramiento juridico, psicologico o profesional. La validez de los registros depende de cada jurisdiccion.
+Coparent Global esta pensada para reducir confusiones, mejorar la organizacion diaria y mantener el foco en el bienestar de los hijos.
+
+Importante: Coparent Global no es un servicio de emergencias, no brinda asesoramiento legal, psicologico ni profesional, y sus registros no constituyen una constancia legal universal. La utilidad de la informacion exportada puede depender de cada pais, institucion o jurisdiccion.
 
 ## Categoria sugerida
 

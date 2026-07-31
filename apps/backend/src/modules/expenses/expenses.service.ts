@@ -101,7 +101,7 @@ export class ExpensesService {
       familyId: dto.familyId,
       actorId: userId,
       title: 'Nuevo gasto familiar',
-      body: dto.description,
+      body: 'Hay una novedad en los gastos familiares.',
       data: { type: 'expense', expenseId: expense.id },
     });
     return expense;

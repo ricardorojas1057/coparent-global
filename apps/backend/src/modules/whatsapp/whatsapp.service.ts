@@ -19,6 +19,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { ExpensesService } from '../expenses/expenses.service';
+import { MessagesService } from '../messages/messages.service';
 import { CreateSharedActionDto } from './whatsapp.dto';
 import { parseWhatsAppAction } from './whatsapp.parser';
 
@@ -48,6 +49,7 @@ export class WhatsAppService {
     private readonly audit: AuditService,
     private readonly expenses: ExpensesService,
     private readonly calendar: CalendarService,
+    private readonly messages: MessagesService,
   ) {}
 
   verifyWebhook(mode?: string, token?: string, challenge?: string) {
@@ -85,11 +87,11 @@ export class WhatsAppService {
     const appUrl = this.config.get<string>('PUBLIC_WEB_URL') ?? 'https://coparent-global.vercel.app';
     return [
       'Te invito a vincular WhatsApp con Coparent Global.',
-      `1. Entrá a ${appUrl}`,
+      `1. Entra a ${appUrl}`,
       '2. Instala o abre la app.',
-      `3. Enviá este mensaje al WhatsApp oficial de Coparent: VINCULAR ${code}`,
+      `3. Envia este mensaje al WhatsApp oficial de Coparent: VINCULAR ${code}`,
       '',
-      'Nada se registra automáticamente. Toda acción enviada por WhatsApp queda pendiente hasta que la confirmes dentro de la app.',
+      'Nada se registra automaticamente. Toda accion enviada por WhatsApp queda pendiente hasta que la confirmes dentro de la app.',
     ].join('\n');
   }
 
@@ -254,14 +256,14 @@ export class WhatsAppService {
         }, userId);
         resultEntityId = event.id;
       } else {
-        const message = await this.prisma.chatMessage.create({
-          data: {
-            familyId: action.link.familyId,
-            senderId: userId,
-            content: String(payload.content),
-            originalContent: action.mediaId ? `whatsapp-media:${action.mediaId}` : action.originalText,
-          },
-        });
+        const content = String(payload.content ?? action.originalText ?? '').trim();
+        if (!content) {
+          throw new BadRequestException('No encontramos texto para confirmar.');
+        }
+        if (content.length > 4000) {
+          throw new BadRequestException('El texto supera el limite permitido.');
+        }
+        const { message, review } = await this.messages.create(action.link.familyId, { content }, userId);
         resultEntityId = message.id;
         await this.audit.log({
           userId,
@@ -269,6 +271,11 @@ export class WhatsAppService {
           action: 'CONFIRM_WHATSAPP_NOTE',
           entity: 'ChatMessage',
           entityId: message.id,
+          metadata: {
+            source: 'WHATSAPP',
+            assistantSuggested: review.needsReview,
+            mediaId: action.mediaId ?? null,
+          },
         });
       }
 
@@ -387,7 +394,7 @@ export class WhatsAppService {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
-    await this.sendText(message.from, `${this.describe(parsed.type, payload)}\nAbrí Coparent para confirmar o cancelar. Nada se registra automáticamente.`);
+    await this.sendText(message.from, `${this.describe(parsed.type, payload)}\nAbri Coparent para confirmar o cancelar. Nada se registra automaticamente.`);
   }
 
   private async createPendingAction(params: {

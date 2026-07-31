@@ -70,7 +70,7 @@ export class MessagesService {
       familyId,
       actorId: userId,
       title: 'Nuevo mensaje familiar',
-      body: `${message.sender.firstName} envio un mensaje.`,
+      body: 'Hay un nuevo mensaje familiar.',
       data: { type: 'family-message', messageId: message.id },
     });
     return { message, review };

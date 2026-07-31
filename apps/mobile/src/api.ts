@@ -340,6 +340,21 @@ export type FamilyArchive = {
   data: unknown;
 };
 
+export type BasicFamilyExport = {
+  manifest: {
+    version: number;
+    type: 'BASIC_FAMILY_HTML';
+    generatedAt: string;
+    algorithm: 'SHA-256';
+    digest: string;
+    notice: string;
+  };
+  fileName: string;
+  mimeType: 'text/html';
+  html: string;
+  text: string;
+};
+
 export type CreateSharedActionInput = {
   familyId: string;
   text?: string;
@@ -805,6 +820,16 @@ export function exportFamilyArchive(accessToken: string, familyId: string) {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+}
+
+export function exportBasicFamilyHtml(accessToken: string, familyId: string, language: 'es' | 'en') {
+  return request<BasicFamilyExport>(
+    `/families/${familyId}/exports/basic?language=${encodeURIComponent(language)}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
 }
 
 export function createSharedWhatsAppAction(

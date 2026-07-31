@@ -6,19 +6,19 @@ Las capturas deben tomarse desde la version final instalada y usar exclusivament
 
 1. Inicio: resumen familiar y proximo evento.
 2. Calendario: evento con responsable, fecha y horario.
-3. Configuracion familiar: invitacion y carga guiada de hijos/as.
-4. Gastos: reporte mensual y saldos.
-5. Perfil: idioma y controles de privacidad.
-6. Configuracion familiar: modo de coparentalidad.
+3. Mensajes: conversacion familiar o estado vacio claro.
+4. Revision de tono: sugerencia neutral antes de enviar.
+5. Gastos: reporte mensual, comprobantes y saldos.
+6. Invitaciones y privacidad: link de invitacion y controles visibles.
 
 ## Nombres de archivo finales
 
 1. `01-inicio-familia-organizada.png`
 2. `02-calendario-responsables.png`
-3. `03-invitaciones-y-familia.png`
-4. `04-gastos-saldos-reportes.png`
-5. `05-perfil-privacidad-idioma.png`
-6. `06-configuracion-modo-coparentalidad.png`
+3. `03-mensajes-familiares.png`
+4. `04-revision-de-tono.png`
+5. `05-gastos-saldos-reportes.png`
+6. `06-invitaciones-privacidad.png`
 
 ## Estado
 
@@ -29,17 +29,18 @@ Las capturas deben tomarse desde la version final instalada y usar exclusivament
 
 ## Texto sugerido para cada captura
 
-1. Tu familia, organizada en un solo lugar.
-2. Responsables, fechas y cambios claros.
-3. Invita al otro progenitor y organiza la familia.
-4. Saldos y gastos faciles de comprender.
-5. Tus datos y consentimientos bajo control.
-6. Una forma de comunicacion adaptada a cada familia.
+1. Tu espacio familiar en un solo lugar.
+2. Fechas, horarios y responsables claros.
+3. Mensajes familiares registrados.
+4. Revisa antes de enviar.
+5. Gastos, comprobantes y saldos.
+6. Invitaciones claras y privacidad visible.
 
 ## Reglas
 
 - Usar una familia ficticia como "Familia Demo".
 - No mostrar emails, telefonos, nombres de hijos o conversaciones reales.
+- No mostrar insultos reales ni lenguaje agresivo en las capturas.
 - Capturar al menos 1080 x 1920 px o una relacion compatible con Play.
 - No agregar marcos o textos que prometan funciones ausentes.
 - Revisar que no aparezcan barras de error, datos de desarrollo ni permisos pendientes.

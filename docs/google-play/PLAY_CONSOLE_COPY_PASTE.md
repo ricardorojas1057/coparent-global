@@ -1,6 +1,6 @@
 # Coparent Global - campos listos para Play Console
 
-Version preparada: 0.10.0 (`versionCode 27`)
+Version preparada: 0.10.0 (`versionCode 36`)
 
 ## Datos de la aplicacion
 
@@ -16,6 +16,7 @@ Version preparada: 0.10.0 (`versionCode 27`)
 | Sitio web | `https://coparent-global.vercel.app` |
 | Politica de privacidad | `https://coparent-global.vercel.app/privacy` |
 | Eliminacion de cuenta | `https://coparent-global.vercel.app/account-deletion` |
+| Link de prueba cerrada | `https://play.google.com/apps/testing/ar.coparent.app` |
 
 ## Declaraciones
 
@@ -50,15 +51,16 @@ Instruccion sugerida:
 
 ### Espanol
 
-Primera version de prueba cerrada de Coparent Global. Incluye calendario
-familiar, mensajeria registrada, gastos y saldos, solicitudes de cambios,
-notificaciones, idiomas espanol e ingles y controles de privacidad.
+Version de prueba cerrada de Coparent Global. Incluye calendario familiar,
+mensajeria registrada, revision de tono, gastos y saldos, invitaciones,
+notificaciones con contenido generico, idiomas espanol e ingles y controles
+de privacidad.
 
 ### English
 
-First closed-testing release of Coparent Global. Includes family calendar,
-recorded messaging, expenses and balances, change requests, notifications,
-Spanish and English, and privacy controls.
+Closed-testing release of Coparent Global. Includes family calendar, recorded
+messaging, tone review, expenses and balances, invitations, generic-content
+notifications, Spanish and English, and privacy controls.
 
 ## Recursos a cargar
 
@@ -66,8 +68,9 @@ Spanish and English, and privacy controls.
 - Feature graphic: `assets/feature-graphic-global-1024x500.png`
 - Descripcion ES: `STORE_LISTING_ES.md`
 - Descripcion EN: `STORE_LISTING_EN.md`
+- ASO y crecimiento: `ASO_GROWTH_STRATEGY.md`
 - Capturas: seguir `SCREENSHOT_PLAN.md`
-- AAB: `C:\Users\Ricardo\Downloads\Coparent-Global-0.10.0-27.aab`
+- AAB: `C:\Users\Ricardo\Downloads\Coparent-Global-0.10.0-36.aab`
 
 ## Respuestas que deben confirmarse manualmente
 

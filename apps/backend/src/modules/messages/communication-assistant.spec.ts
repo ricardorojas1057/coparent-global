@@ -27,6 +27,14 @@ describe('reviewCommunication', () => {
     expect(review.suggestion).toContain('bienestar');
   });
 
+  it('detects aggressive testing phrases used by real users', () => {
+    const review = reviewCommunication('Quiero ver al nene, mala madre, mal parida. Sos una hija de puta, forra.', 'es-AR');
+
+    expect(review.needsReview).toBe(true);
+    expect(review.reasons).toContain('Contiene lenguaje que puede sentirse hostil.');
+    expect(review.suggestion).toContain('bienestar');
+  });
+
   it('detects hostile wording with accents after normalizing text', () => {
     const review = reviewCommunication('Sos un inútil, siempre hacés lo mismo.', 'es-AR');
 

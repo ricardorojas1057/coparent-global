@@ -6,23 +6,27 @@ Coparent Global
 
 ## Short description
 
-Calendar, messages, and expenses for clear, organized co-parenting.
+Private co-parenting calendar, messages, expenses, and family organization.
 
 ## Full description
 
-Coparent Global helps responsible adults organize co-parenting with clear information, confirmed actions, and a focus on children's wellbeing.
+Coparent Global helps separated or co-parenting families organize daily family life in one private place.
 
-Key features:
+With the app you can:
 
-- Family calendar with responsible adults, times, and change requests.
-- Recorded family messaging and a neutral-tone communication assistant.
-- Shared expenses, receipts, reimbursements, balances, and monthly reports.
-- Cooperative, structured communication, and high-conflict modes.
-- Family invitations through protected links.
-- Spanish and English, initial offline support, and privacy controls.
-- Account deletion requests from within the app.
+- Create events, schedules, and family responsibilities.
+- Keep important family messages in a private space.
+- Review the tone of a message before sending it.
+- Organize shared expenses, payments made by one parent, and pending balances.
+- Store receipts and generate basic reports.
+- Invite the other parent with secure links.
+- Configure co-parenting modes based on the level of cooperation.
+- Use the app in Spanish or English.
+- Request account and data deletion from the app or the web.
 
-Coparent Global is not an emergency service and does not provide legal, psychological, or other professional advice. The legal validity of records depends on each jurisdiction.
+Coparent Global is designed to reduce confusion, improve daily organization, and keep the focus on children's wellbeing.
+
+Important: Coparent Global is not an emergency service, does not provide legal, psychological, or professional advice, and its records are not a universal legal certificate. The usefulness of exported information may depend on each country, institution, or jurisdiction.
 
 ## Suggested category
 

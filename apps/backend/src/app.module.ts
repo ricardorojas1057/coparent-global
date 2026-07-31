@@ -14,6 +14,7 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { AccountModule } from './modules/account/account.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { ExportsModule } from './modules/exports/exports.module';
 import { validateEnvironment } from './common/config/environment';
 
 @Module({
@@ -33,6 +34,7 @@ import { validateEnvironment } from './common/config/environment';
     AccountModule,
     NotificationsModule,
     SubscriptionsModule,
+    ExportsModule,
   ],
 })
 export class AppModule {}
